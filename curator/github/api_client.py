@@ -246,8 +246,10 @@ class GitHubAPIClient:
                 # Try to get as directory
                 sub_items = self.list_directory(full_name, item_path)
                 if sub_items and sub_items != [item]:
+                    print(f"      📁 {item_path}/")
                     structure[item] = _get_structure(item_path, depth + 1)
                 else:
+                    print(f"      📄 {item_path}")
                     structure[item] = "file"  # type: ignore[assignment]
 
             return structure
