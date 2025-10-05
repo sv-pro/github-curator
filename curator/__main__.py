@@ -15,6 +15,7 @@ from curator.core.intent_structuring import IntentStructurer  # noqa: E402
 from curator.core.metacognitive_eval import MetacognitiveEvaluator  # noqa: E402
 from curator.core.reflection import Reflector  # noqa: E402
 from curator.core.validation import Validator  # noqa: E402
+from curator.github.adaptive_search import AdaptiveSearchStrategy, SearchConstraints  # noqa: E402
 from curator.github.api_client import GitHubAPIClient  # noqa: E402
 from curator.github.repo_analyzer import RepositoryAnalyzer  # noqa: E402
 from curator.outputs.report_generator import ReportGenerator  # noqa: E402
@@ -126,14 +127,20 @@ def curate(
         max_age_months = (
             int(max_age_days / 30) if max_age_days else intent.constraints.max_age_months
         )
-        repos = github_client.search_repositories(
-            query=theme,
+
+        # Use adaptive search strategy
+        adaptive_search = AdaptiveSearchStrategy(config)
+        constraints = SearchConstraints(
             min_stars=min_stars_val,
             max_age_months=max_age_months,
             requires_license=intent.constraints.requires_license,
-            limit=limit,
         )
-        click.echo(f"   Found {len(repos)} candidate repositories")
+
+        repos = adaptive_search.adaptive_search(
+            theme=theme, github_client=github_client, initial_constraints=constraints, limit=limit
+        )
+
+        click.echo(f"   Selected {len(repos)} candidate repositories for evaluation")
         click.echo("")
     except Exception as e:
         click.echo("\n❌ Error searching GitHub:", err=True)

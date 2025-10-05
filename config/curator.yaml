@@ -6,9 +6,9 @@ intent:
     documentation: 0.2
 
   constraints:
-    min_stars: 50
-    max_age_months: 6
-    requires_license: true
+    min_stars: 20
+    max_age_months: 18
+    requires_license: false
 
 github:
   search_limit: 100
@@ -18,6 +18,18 @@ github:
     - docs/
     - examples/
   rate_limit_buffer: 10
+
+  # Adaptive search strategy
+  adaptive_search:
+    enabled: true
+    target_repo_count: 30
+    min_repo_count: 20
+    max_repo_count: 50
+    max_iterations: 5
+    initial_queries_count: 3
+    # Constraint adjustment per iteration
+    stars_adjustment: 10
+    age_adjustment_months: 2
 
 evaluation:
   confidence_threshold_high: 0.7
