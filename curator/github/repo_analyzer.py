@@ -1,6 +1,10 @@
 """Repository content analysis and context gathering."""
 
+import shutil
+import subprocess
+import tempfile
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Optional
 
 import yaml
@@ -44,16 +48,26 @@ class RepositoryContext:
 class RepositoryAnalyzer:
     """Analyzes repository content and gathers context for evaluation."""
 
-    def __init__(self, github_client: GitHubAPIClient, config_path: str = "config/curator.yaml"):
+    def __init__(
+        self,
+        github_client: GitHubAPIClient,
+        config_path: str = "config/curator.yaml",
+        use_git_clone: bool = False,
+    ):
         """Initialize analyzer.
 
         Args:
             github_client: GitHub API client instance
             config_path: Path to configuration file
+            use_git_clone: If True, clone repos locally instead of using API
         """
         self.github_client = github_client
         self.config = self._load_config(config_path)
         self.context_files = self.config["github"]["context_files"]
+        self.use_git_clone = use_git_clone
+        self.temp_dir = None
+        if use_git_clone:
+            self.temp_dir = Path(tempfile.mkdtemp(prefix="curator_repos_"))
 
     def _load_config(self, config_path: str) -> dict[str, Any]:
         """Load configuration from YAML file."""
@@ -69,6 +83,101 @@ class RepositoryAnalyzer:
         Returns:
             RepositoryContext with all gathered information
         """
+        if self.use_git_clone:
+            return self._analyze_via_git_clone(repo)
+        else:
+            return self._analyze_via_api(repo)
+
+    def _analyze_via_git_clone(self, repo: SearchResult) -> RepositoryContext:
+        """Analyze repository by cloning it locally."""
+        context = RepositoryContext(full_name=repo.full_name, metadata=repo)
+
+        # Clone repository
+        assert self.temp_dir is not None, "temp_dir must be set when use_git_clone=True"
+        repo_dir = self.temp_dir / repo.full_name.replace("/", "_")
+        print("    • Cloning repository...")
+        try:
+            subprocess.run(
+                ["git", "clone", "--depth", "1", "--quiet", repo.url, str(repo_dir)],
+                check=True,
+                capture_output=True,
+                timeout=60,
+            )
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+            print(f"    ⚠️ Clone failed: {e}")
+            return self._analyze_via_api(repo)  # Fallback to API
+
+        try:
+            # Get README
+            readme_files = ["README.md", "README.rst", "README.txt", "README"]
+            for readme_name in readme_files:
+                readme_path = repo_dir / readme_name
+                if readme_path.exists():
+                    context.readme_content = readme_path.read_text(errors="ignore")
+                    print(f"    • README: {len(context.readme_content)} chars")
+                    break
+
+            # Get file structure
+            print("    • Scanning directory tree...")
+            context.file_structure = self._get_local_structure(repo_dir, max_depth=2)
+
+            # Get root directory listing
+            context.directory_listing = [
+                f.name for f in repo_dir.iterdir() if not f.name.startswith(".")
+            ]
+
+            # Try to fetch additional context files
+            for file_spec in self.context_files:
+                file_path = repo_dir / file_spec.rstrip("/")
+                if file_path.is_dir():
+                    items = [f.name for f in file_path.iterdir()]
+                    context.additional_files[
+                        file_spec
+                    ] = f"Directory contains: {', '.join(items[:20])}"
+                    print(f"    • {file_spec}: {len(items)} items")
+                elif file_path.is_file():
+                    content = file_path.read_text(errors="ignore")
+                    context.additional_files[file_spec] = content[:5000] + (
+                        "..." if len(content) > 5000 else ""
+                    )
+                    print(f"    • {file_spec}: {len(content)} chars")
+
+        finally:
+            # Cleanup
+            if repo_dir.exists():
+                shutil.rmtree(repo_dir, ignore_errors=True)
+
+        return context
+
+    def _get_local_structure(
+        self, repo_dir: Path, max_depth: int = 2, current_depth: int = 0
+    ) -> dict[str, Any]:
+        """Get directory structure from local filesystem."""
+        if current_depth >= max_depth:
+            return {}
+
+        structure = {}
+        try:
+            for item in repo_dir.iterdir():
+                if item.name.startswith("."):  # Skip hidden files
+                    continue
+
+                rel_path = item.relative_to(repo_dir.parent)
+                if item.is_dir():
+                    print(f"      📁 {rel_path}/")
+                    structure[item.name] = self._get_local_structure(
+                        item, max_depth, current_depth + 1
+                    )
+                else:
+                    print(f"      📄 {rel_path}")
+                    structure[item.name] = "file"  # type: ignore[assignment]
+        except PermissionError:
+            pass
+
+        return structure
+
+    def _analyze_via_api(self, repo: SearchResult) -> RepositoryContext:
+        """Analyze repository via GitHub API (original method)."""
         context = RepositoryContext(full_name=repo.full_name, metadata=repo)
 
         # Get README

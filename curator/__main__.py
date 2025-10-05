@@ -55,6 +55,9 @@ def cli():
 @click.option(
     "--max-age-days", type=int, help="Maximum age in days since last push (overrides config)"
 )
+@click.option(
+    "--use-git-clone", is_flag=True, help="Clone repos locally instead of using GitHub API (faster)"
+)
 @click.option("--trace/--no-trace", default=True, help="Generate HTML trace viewer")
 def curate(
     theme: str,
@@ -65,6 +68,7 @@ def curate(
     limit: Optional[int],
     min_stars: Optional[str],
     max_age_days: Optional[int],
+    use_git_clone: bool,
     trace: bool,
 ):
     """Curate GitHub repositories based on a theme.
@@ -78,7 +82,7 @@ def curate(
         # Initialize components
         structurer = IntentStructurer(config)
         github_client = GitHubAPIClient(config)
-        analyzer = RepositoryAnalyzer(github_client, config)
+        analyzer = RepositoryAnalyzer(github_client, config, use_git_clone=use_git_clone)
         evaluator = MetacognitiveEvaluator(config)
         validator = Validator(config)
         reflector = Reflector(config)
