@@ -1,0 +1,6 @@
+# Install the package with dependencies using modern pyproject.toml
+# For production use:
+-e .
+
+# For development (includes testing, linting, type checking):
+# -e .[dev]

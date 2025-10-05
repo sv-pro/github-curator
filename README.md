@@ -50,17 +50,47 @@ Metacognitive Evaluation → Validation → Results → Reflection → Reports
 
 ## Installation
 
+### Quick Install
+
 ```bash
 # Clone the repository
 git clone https://github.com/IntentHub/github-curator.git
 cd github-curator
 
-# Create virtual environment
+# Create and activate virtual environment
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-# Install dependencies
-pip install -r requirements.txt
+# Install with pip (uses modern pyproject.toml)
+pip install -e .
+
+# For development (includes testing, linting, type checking)
+pip install -e ".[dev]"
+
+# Or use Make
+make install      # production
+make install-dev  # development
+```
+
+### Prerequisites
+
+- Python 3.9 or higher
+- Anthropic API key ([get one here](https://console.anthropic.com/))
+- GitHub Personal Access Token ([create one here](https://github.com/settings/tokens))
+
+### Environment Setup
+
+```bash
+# Copy environment template
+cp .env.example .env
+
+# Edit .env and add your API keys
+ANTHROPIC_API_KEY=your_key_here
+GITHUB_TOKEN=your_token_here
+
+# Verify setup
+python -m curator setup
+# Or: make setup
 ```
 
 ## Configuration
@@ -87,12 +117,25 @@ python -m curator curate "well-documented APIs" --trace --output results/
 
 ## Project Status
 
-This project is currently in the specification phase. The architecture and modules described above represent the planned implementation from [instructions.md](instructions.md).
+✨ **Implementation Complete!** The GitHub Curator is now fully functional with all core features implemented.
+
+- ✅ Intent structuring with Claude
+- ✅ GitHub API integration
+- ✅ Metacognitive evaluation
+- ✅ Multi-level validation
+- ✅ Reflection and pattern analysis
+- ✅ Multi-format reporting (Markdown, JSON, HTML)
+- ✅ CLI interface
+
+See [IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md) for details.
 
 ## Documentation
 
-- [CLAUDE.md](CLAUDE.md): Development guidance for Claude Code
-- [instructions.md](instructions.md): Complete implementation specification
+- [USAGE.md](docs/USAGE.md): Comprehensive usage guide
+- [IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md): Implementation details
+- [CONTRIBUTING.md](CONTRIBUTING.md): Development guidelines
+- [CLAUDE.md](CLAUDE.md): Claude Code integration
+- [instructions.md](instructions.md): Original specification
 
 ## License
 

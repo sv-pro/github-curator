@@ -1,0 +1,40 @@
+intent:
+  default_weights:
+    architectural_maturity: 0.3
+    autonomy_level: 0.3
+    safety: 0.2
+    documentation: 0.2
+
+  constraints:
+    min_stars: 50
+    max_age_months: 6
+    requires_license: true
+
+github:
+  search_limit: 100
+  context_files:
+    - README.md
+    - ARCHITECTURE.md
+    - docs/
+    - examples/
+  rate_limit_buffer: 10
+
+evaluation:
+  confidence_threshold_high: 0.7
+  confidence_threshold_low: 0.4
+  min_indicators_found: 2
+
+validation:
+  strict_mode: false
+  fail_on_warnings: false
+
+reflection:
+  min_evaluations_for_patterns: 10
+  correlation_threshold: 0.7
+
+output:
+  formats:
+    - markdown
+    - json
+    - html_trace
+  trace_detail: full
