@@ -1,0 +1,32 @@
+{
+  "curation_id": "4a604706-06ed-4dfe-bca4-4713ab94b0cc",
+  "theme": "AI agent frameworks",
+  "date": "2025-10-05T21:13:05.208850",
+  "statistics": {
+    "total_evaluated": 3,
+    "highly_relevant": 0,
+    "average_confidence": 0.6833333333333332,
+    "validation_status": "valid"
+  },
+  "top_repositories": [
+    {
+      "repo": "FoundationAgents/MetaGPT",
+      "score": 0.68,
+      "confidence": 0.76,
+      "recommendation": "include_with_notes"
+    },
+    {
+      "repo": "microsoft/autogen",
+      "score": 0.64,
+      "confidence": 0.56,
+      "recommendation": "include_with_notes"
+    },
+    {
+      "repo": "lobehub/lobe-chat",
+      "score": 0.63,
+      "confidence": 0.73,
+      "recommendation": "include_with_notes"
+    }
+  ],
+  "key_insights": []
+}

@@ -123,9 +123,14 @@ class MetacognitiveEvaluator:
         """
         # Evaluate each dimension
         dimension_scores = []
-        for dimension in intent.dimensions:
+        total_dims = len(intent.dimensions)
+        for idx, dimension in enumerate(intent.dimensions, 1):
+            print(f"    • Dimension {idx}/{total_dims}: {dimension.name}...", end=" ", flush=True)
             score = self._evaluate_dimension(dimension, context_summary, intent.theme)
             dimension_scores.append(score)
+            print(f"✓ {score.score:.2f} (conf: {score.confidence:.2f})")
+
+        print("    • Computing overall score...")
 
         # Calculate overall relevance (weighted average)
         overall_relevance = sum(

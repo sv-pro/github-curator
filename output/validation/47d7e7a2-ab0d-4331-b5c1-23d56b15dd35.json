@@ -1,0 +1,30 @@
+{
+  "validation_id": "47d7e7a2-ab0d-4331-b5c1-23d56b15dd35",
+  "timestamp": "2025-10-05T21:13:05.205506",
+  "intent_validation": {
+    "status": "valid",
+    "checks_passed": 6,
+    "checks_failed": 0,
+    "warnings": [],
+    "errors": []
+  },
+  "results_validation": {
+    "status": "valid",
+    "total_repos": 3,
+    "score_distribution": {
+      "0.8-1.0": 0,
+      "0.6-0.8": 3,
+      "0.4-0.6": 0,
+      "0.0-0.4": 0
+    },
+    "confidence_distribution": {
+      "0.8-1.0": 0,
+      "0.6-0.8": 2,
+      "0.4-0.6": 1,
+      "0.0-0.4": 0
+    },
+    "checks_passed": 1,
+    "checks_failed": 0,
+    "warnings": []
+  }
+}
