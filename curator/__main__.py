@@ -52,22 +52,31 @@ def curate(
     click.echo(f"🔍 Starting curation: {theme}")
     click.echo("")
 
-    # Initialize components
-    structurer = IntentStructurer(config)
-    github_client = GitHubAPIClient(config)
-    analyzer = RepositoryAnalyzer(github_client, config)
-    evaluator = MetacognitiveEvaluator(config)
-    validator = Validator(config)
-    reflector = Reflector(config)
-    report_gen = ReportGenerator(output)
+    try:
+        # Initialize components
+        structurer = IntentStructurer(config)
+        github_client = GitHubAPIClient(config)
+        analyzer = RepositoryAnalyzer(github_client, config)
+        evaluator = MetacognitiveEvaluator(config)
+        validator = Validator(config)
+        reflector = Reflector(config)
+        report_gen = ReportGenerator(output)
 
-    # Step 1: Structure intent
-    click.echo("📋 Structuring intent...")
-    intent = structurer.structure_theme(
-        theme=theme,
-        focus_areas=list(focus) if focus else None,
-        exclusions=list(exclude) if exclude else None,
-    )
+        # Step 1: Structure intent
+        click.echo("📋 Structuring intent...")
+        intent = structurer.structure_theme(
+            theme=theme,
+            focus_areas=list(focus) if focus else None,
+            exclusions=list(exclude) if exclude else None,
+        )
+    except Exception as e:
+        click.echo("\n❌ Error during initialization or intent structuring:", err=True)
+        click.echo(f"   {type(e).__name__}: {e}", err=True)
+        click.echo("\nTroubleshooting:", err=True)
+        click.echo("  - Check your ANTHROPIC_API_KEY is valid", err=True)
+        click.echo("  - Verify config/curator.yaml exists and is valid", err=True)
+        click.echo("  - Run 'make setup' to verify configuration", err=True)
+        raise click.Abort() from None
 
     click.echo(f"   Created {len(intent.dimensions)} evaluation dimensions:")
     for dim in intent.dimensions:
@@ -85,30 +94,60 @@ def curate(
 
     # Step 3: Search repositories
     click.echo("🔎 Searching GitHub...")
-    min_stars_val = min_stars or intent.constraints.min_stars
-    repos = github_client.search_repositories(
-        query=theme,
-        min_stars=min_stars_val,
-        max_age_months=intent.constraints.max_age_months,
-        requires_license=intent.constraints.requires_license,
-        limit=limit,
-    )
-    click.echo(f"   Found {len(repos)} candidate repositories")
-    click.echo("")
+    try:
+        min_stars_val = min_stars or intent.constraints.min_stars
+        repos = github_client.search_repositories(
+            query=theme,
+            min_stars=min_stars_val,
+            max_age_months=intent.constraints.max_age_months,
+            requires_license=intent.constraints.requires_license,
+            limit=limit,
+        )
+        click.echo(f"   Found {len(repos)} candidate repositories")
+        click.echo("")
+    except Exception as e:
+        click.echo("\n❌ Error searching GitHub:", err=True)
+        click.echo(f"   {type(e).__name__}: {e}", err=True)
+        click.echo("\nTroubleshooting:", err=True)
+        click.echo("  - Check your GITHUB_TOKEN is valid", err=True)
+        click.echo("  - Verify you haven't exceeded GitHub API rate limits", err=True)
+        click.echo("  - Check your internet connection", err=True)
+        raise click.Abort() from None
+
+    if not repos:
+        click.echo("⚠️  No repositories found matching criteria", err=True)
+        raise click.Abort()
 
     # Step 4: Analyze and evaluate
     click.echo("🧠 Evaluating repositories...")
     evaluations = []
 
-    with click.progressbar(repos, label="Analyzing") as bar:
-        for repo in bar:
-            # Gather context
-            context = analyzer.analyze_repository(repo)
-            context_summary = analyzer.get_evaluation_context_summary(context)
+    try:
+        with click.progressbar(repos, label="Analyzing") as bar:
+            for repo in bar:
+                # Gather context
+                context = analyzer.analyze_repository(repo)
+                context_summary = analyzer.get_evaluation_context_summary(context)
 
-            # Evaluate
-            evaluation = evaluator.evaluate_repository(context, intent, context_summary)
-            evaluations.append(evaluation)
+                # Evaluate
+                evaluation = evaluator.evaluate_repository(context, intent, context_summary)
+                evaluations.append(evaluation)
+    except KeyboardInterrupt:
+        click.echo("\n\n⚠️  Evaluation interrupted by user", err=True)
+        if evaluations:
+            click.echo(f"   Processed {len(evaluations)} repositories before interruption")
+            click.echo("   Continuing with partial results...")
+        else:
+            click.echo("   No evaluations completed", err=True)
+            raise click.Abort() from None
+    except Exception as e:
+        click.echo("\n❌ Error during evaluation:", err=True)
+        click.echo(f"   {type(e).__name__}: {e}", err=True)
+        if evaluations:
+            click.echo(f"   Processed {len(evaluations)} repositories before error")
+            click.echo("   Continuing with partial results...")
+        else:
+            raise click.Abort() from None
 
     click.echo(f"   Completed {len(evaluations)} evaluations")
     click.echo("")

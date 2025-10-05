@@ -1,20 +1,22 @@
 """Metacognitive evaluation module - evaluates repositories with explicit confidence tracking."""
 
-from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional
-from datetime import datetime
-import anthropic
-import os
-import yaml
 import json
+import os
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any
 
-from curator.core.intent_structuring import StructuredIntent, Dimension
+import anthropic
+import yaml
+
+from curator.core.intent_structuring import Dimension, StructuredIntent
 from curator.github.repo_analyzer import RepositoryContext
 
 
 @dataclass
 class IndicatorEvidence:
     """Evidence for a specific indicator."""
+
     indicator: str
     evidence: str
     location: str
@@ -24,36 +26,39 @@ class IndicatorEvidence:
 @dataclass
 class DimensionScore:
     """Score for a single evaluation dimension."""
+
     dimension: str
     score: float
     confidence: float
-    found_indicators: List[IndicatorEvidence]
-    missing_indicators: List[str]
+    found_indicators: list[IndicatorEvidence]
+    missing_indicators: list[str]
     reasoning: str
 
 
 @dataclass
 class MetacognitiveNotes:
     """Metacognitive reflection on the evaluation."""
+
     context_completeness: float
-    limitations: List[str]
-    confidence_factors: Dict[str, List[str]]
+    limitations: list[str]
+    confidence_factors: dict[str, list[str]]
 
 
 @dataclass
 class EvaluationReport:
     """Complete evaluation report for a repository."""
+
     repo: str
     intent_id: str
     evaluated_at: str
     overall_relevance: float
     confidence: float
-    dimension_scores: List[DimensionScore]
+    dimension_scores: list[DimensionScore]
     metacognitive_notes: MetacognitiveNotes
     recommendation: str
     notes: str
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
         return {
             "repo": self.repo,
@@ -71,22 +76,22 @@ class EvaluationReport:
                             "indicator": ie.indicator,
                             "evidence": ie.evidence,
                             "location": ie.location,
-                            "confidence": ie.confidence
+                            "confidence": ie.confidence,
                         }
                         for ie in ds.found_indicators
                     ],
                     "missing_indicators": ds.missing_indicators,
-                    "reasoning": ds.reasoning
+                    "reasoning": ds.reasoning,
                 }
                 for ds in self.dimension_scores
             ],
             "metacognitive_notes": {
                 "context_completeness": self.metacognitive_notes.context_completeness,
                 "limitations": self.metacognitive_notes.limitations,
-                "confidence_factors": self.metacognitive_notes.confidence_factors
+                "confidence_factors": self.metacognitive_notes.confidence_factors,
             },
             "recommendation": self.recommendation,
-            "notes": self.notes
+            "notes": self.notes,
         }
 
 
@@ -98,16 +103,13 @@ class MetacognitiveEvaluator:
         self.config = self._load_config(config_path)
         self.client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
-    def _load_config(self, config_path: str) -> Dict[str, Any]:
+    def _load_config(self, config_path: str) -> dict[str, Any]:
         """Load configuration from YAML file."""
-        with open(config_path, 'r') as f:
+        with open(config_path) as f:
             return yaml.safe_load(f)
 
     def evaluate_repository(
-        self,
-        context: RepositoryContext,
-        intent: StructuredIntent,
-        context_summary: str
+        self, context: RepositoryContext, intent: StructuredIntent, context_summary: str
     ) -> EvaluationReport:
         """Evaluate a repository against structured intent.
 
@@ -139,16 +141,12 @@ class MetacognitiveEvaluator:
 
         # Generate metacognitive notes
         metacognitive_notes = self._generate_metacognitive_notes(
-            dimension_scores,
-            context,
-            overall_confidence
+            dimension_scores, context, overall_confidence
         )
 
         # Determine recommendation
         recommendation = self._determine_recommendation(
-            overall_relevance,
-            overall_confidence,
-            dimension_scores
+            overall_relevance, overall_confidence, dimension_scores
         )
 
         # Generate summary notes
@@ -163,14 +161,11 @@ class MetacognitiveEvaluator:
             dimension_scores=dimension_scores,
             metacognitive_notes=metacognitive_notes,
             recommendation=recommendation,
-            notes=notes
+            notes=notes,
         )
 
     def _evaluate_dimension(
-        self,
-        dimension: Dimension,
-        context_summary: str,
-        theme: str
+        self, dimension: Dimension, context_summary: str, theme: str
     ) -> DimensionScore:
         """Evaluate a single dimension using Claude.
 
@@ -182,9 +177,9 @@ class MetacognitiveEvaluator:
         Returns:
             DimensionScore with evidence and confidence
         """
-        indicators_text = "\n".join([
-            f"- {ind.name}: {ind.description}" for ind in dimension.indicators
-        ])
+        indicators_text = "\n".join(
+            [f"- {ind.name}: {ind.description}" for ind in dimension.indicators]
+        )
 
         prompt = f"""You are evaluating a GitHub repository for the dimension "{dimension.name}" as part of curating repositories for: "{theme}"
 
@@ -227,43 +222,43 @@ Return a JSON object with this structure:
 Be precise and trace all claims to specific evidence."""
 
         response = self.client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model="claude-sonnet-4-5-20250929",
             max_tokens=2000,
-            messages=[{"role": "user", "content": prompt}]
+            messages=[{"role": "user", "content": prompt}],
         )
 
         # Parse response
         response_text = response.content[0].text
-        start_idx = response_text.find('{')
-        end_idx = response_text.rfind('}') + 1
+        start_idx = response_text.find("{")
+        end_idx = response_text.rfind("}") + 1
         json_text = response_text[start_idx:end_idx]
         data = json.loads(json_text)
 
         # Convert to DimensionScore
         found_indicators = [
             IndicatorEvidence(
-                indicator=ind['indicator'],
-                evidence=ind['evidence'],
-                location=ind['location'],
-                confidence=ind.get('confidence', 0.5)
+                indicator=ind["indicator"],
+                evidence=ind["evidence"],
+                location=ind["location"],
+                confidence=ind.get("confidence", 0.5),
             )
-            for ind in data.get('found_indicators', [])
+            for ind in data.get("found_indicators", [])
         ]
 
         return DimensionScore(
             dimension=dimension.name,
-            score=data['score'],
-            confidence=data['confidence'],
+            score=data["score"],
+            confidence=data["confidence"],
             found_indicators=found_indicators,
-            missing_indicators=data.get('missing_indicators', []),
-            reasoning=data['reasoning']
+            missing_indicators=data.get("missing_indicators", []),
+            reasoning=data["reasoning"],
         )
 
     def _generate_metacognitive_notes(
         self,
-        dimension_scores: List[DimensionScore],
+        dimension_scores: list[DimensionScore],
         context: RepositoryContext,
-        overall_confidence: float
+        overall_confidence: float,
     ) -> MetacognitiveNotes:
         """Generate metacognitive notes about the evaluation.
 
@@ -320,17 +315,14 @@ Be precise and trace all claims to specific evidence."""
         return MetacognitiveNotes(
             context_completeness=round(context_completeness, 2),
             limitations=limitations,
-            confidence_factors={
-                "high": high_confidence_factors,
-                "low": low_confidence_factors
-            }
+            confidence_factors={"high": high_confidence_factors, "low": low_confidence_factors},
         )
 
     def _determine_recommendation(
         self,
         overall_relevance: float,
         overall_confidence: float,
-        dimension_scores: List[DimensionScore]
+        dimension_scores: list[DimensionScore],
     ) -> str:
         """Determine recommendation based on scores and confidence."""
         if overall_relevance >= 0.7 and overall_confidence >= 0.6:
@@ -344,9 +336,9 @@ Be precise and trace all claims to specific evidence."""
 
     def _generate_notes(
         self,
-        dimension_scores: List[DimensionScore],
+        dimension_scores: list[DimensionScore],
         overall_relevance: float,
-        overall_confidence: float
+        overall_confidence: float,
     ) -> str:
         """Generate human-readable notes about the evaluation."""
         notes_parts = []

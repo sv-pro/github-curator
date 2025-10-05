@@ -53,10 +53,10 @@ class GitHubAPIClient:
     def _check_rate_limit(self):
         """Check rate limit and sleep if necessary."""
         rate_limit = self.client.get_rate_limit()
-        remaining = rate_limit.core.remaining
+        remaining = rate_limit.resources.core.remaining
 
         if remaining < self.rate_limit_buffer:
-            reset_time = rate_limit.core.reset
+            reset_time = rate_limit.resources.core.reset
             sleep_time = (reset_time - datetime.now()).total_seconds() + 10
             if sleep_time > 0:
                 print(f"Rate limit approaching. Sleeping for {sleep_time:.0f} seconds...")
@@ -94,13 +94,15 @@ class GitHubAPIClient:
         cutoff_date = datetime.now() - timedelta(days=max_age_months * 30)
         query_parts.append(f"pushed:>={cutoff_date.strftime('%Y-%m-%d')}")
 
-        if requires_license:
-            query_parts.append("license:*")
+        # Note: GitHub doesn't support license:* wildcard
+        # We'll filter repositories without licenses in post-processing if needed
+        # For now, we skip the license filter in the search query
 
         if language:
             query_parts.append(f"language:{language}")
 
         full_query = " ".join(query_parts)
+        print(f"GitHub search query: {full_query}")
 
         # Execute search
         try:
@@ -109,10 +111,22 @@ class GitHubAPIClient:
                 query=full_query, sort="stars", order="desc"
             )
 
+            print(f"Total results found: {repositories.totalCount}")
+
             results = []
-            for repo in repositories[:search_limit]:
+            count = 0
+            for repo in repositories:
+                if count >= search_limit:
+                    break
+
                 self._check_rate_limit()
 
+                # Filter by license if required
+                if requires_license and not repo.license:
+                    print(f"Skipping {repo.full_name} - no license")
+                    continue
+
+                print(f"Adding repository: {repo.full_name} (stars: {repo.stargazers_count})")
                 results.append(
                     SearchResult(
                         full_name=repo.full_name,
@@ -127,7 +141,9 @@ class GitHubAPIClient:
                         topics=repo.get_topics(),
                     )
                 )
+                count += 1
 
+            print(f"Returning {len(results)} repositories after filtering")
             return results
 
         except GithubException as e:
