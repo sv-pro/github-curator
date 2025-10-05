@@ -34,6 +34,9 @@ def cli():
 @click.option("--output", "-o", default="output", help="Output directory")
 @click.option("--limit", "-l", type=int, help="Maximum repositories to evaluate")
 @click.option("--min-stars", type=int, help="Minimum stars (overrides config)")
+@click.option(
+    "--max-age-days", type=int, help="Maximum age in days since last push (overrides config)"
+)
 @click.option("--trace/--no-trace", default=True, help="Generate HTML trace viewer")
 def curate(
     theme: str,
@@ -43,6 +46,7 @@ def curate(
     output: str,
     limit: Optional[int],
     min_stars: Optional[int],
+    max_age_days: Optional[int],
     trace: bool,
 ):
     """Curate GitHub repositories based on a theme.
@@ -96,10 +100,14 @@ def curate(
     click.echo("🔎 Searching GitHub...")
     try:
         min_stars_val = min_stars or intent.constraints.min_stars
+        # Convert days to months if specified
+        max_age_months = (
+            int(max_age_days / 30) if max_age_days else intent.constraints.max_age_months
+        )
         repos = github_client.search_repositories(
             query=theme,
             min_stars=min_stars_val,
-            max_age_months=intent.constraints.max_age_months,
+            max_age_months=max_age_months,
             requires_license=intent.constraints.requires_license,
             limit=limit,
         )
