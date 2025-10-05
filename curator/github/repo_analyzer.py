@@ -77,7 +77,7 @@ class RepositoryAnalyzer:
             print(f"    • README: {len(context.readme_content)} chars")
 
         # Get file structure
-        print("    • Fetching file structure...")
+        print("    • Scanning directory tree (2 levels)...")
         context.file_structure = self.github_client.get_repository_structure(
             repo.full_name, max_depth=2
         )
