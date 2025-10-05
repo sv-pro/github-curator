@@ -62,6 +62,7 @@ htmlcov/
 *.cache
 
 # Output directories
+output
 outputs/
 results/
 reports/
@@ -86,3 +87,4 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 .cache/
+output/
