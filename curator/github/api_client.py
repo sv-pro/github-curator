@@ -102,7 +102,7 @@ class GitHubAPIClient:
             query_parts.append(f"language:{language}")
 
         full_query = " ".join(query_parts)
-        print(f"GitHub search query: {full_query}")
+        print(f"  Query: {full_query}")
 
         # Execute search
         try:
@@ -111,7 +111,7 @@ class GitHubAPIClient:
                 query=full_query, sort="stars", order="desc"
             )
 
-            print(f"Total results found: {repositories.totalCount}")
+            print(f"  Total matches: {repositories.totalCount}")
 
             results = []
             count = 0
@@ -123,10 +123,10 @@ class GitHubAPIClient:
 
                 # Filter by license if required
                 if requires_license and not repo.license:
-                    print(f"Skipping {repo.full_name} - no license")
+                    print(f"  ⊘ Skipping {repo.full_name} - no license")
                     continue
 
-                print(f"Adding repository: {repo.full_name} (stars: {repo.stargazers_count})")
+                print(f"  ✓ Found: {repo.full_name} (⭐ {repo.stargazers_count})")
                 results.append(
                     SearchResult(
                         full_name=repo.full_name,
@@ -143,7 +143,7 @@ class GitHubAPIClient:
                 )
                 count += 1
 
-            print(f"Returning {len(results)} repositories after filtering")
+            print(f"  Selected {len(results)} repositories for evaluation")
             return results
 
         except GithubException as e:
