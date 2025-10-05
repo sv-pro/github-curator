@@ -1,22 +1,25 @@
 """Repository content analysis and context gathering."""
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Any, Optional
-from curator.github.api_client import GitHubAPIClient, SearchResult
+from typing import Any, Optional
+
 import yaml
+
+from curator.github.api_client import GitHubAPIClient, SearchResult
 
 
 @dataclass
 class RepositoryContext:
     """Aggregated context about a repository for evaluation."""
+
     full_name: str
     metadata: SearchResult
     readme_content: Optional[str] = None
-    file_structure: Dict[str, Any] = field(default_factory=dict)
-    additional_files: Dict[str, str] = field(default_factory=dict)
-    directory_listing: List[str] = field(default_factory=list)
+    file_structure: dict[str, Any] = field(default_factory=dict)
+    additional_files: dict[str, str] = field(default_factory=dict)
+    directory_listing: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
         return {
             "full_name": self.full_name,
@@ -29,12 +32,12 @@ class RepositoryContext:
                 "language": self.metadata.language,
                 "license": self.metadata.license_name,
                 "url": self.metadata.url,
-                "topics": self.metadata.topics
+                "topics": self.metadata.topics,
             },
             "readme_content": self.readme_content,
             "file_structure": self.file_structure,
             "additional_files": self.additional_files,
-            "directory_listing": self.directory_listing
+            "directory_listing": self.directory_listing,
         }
 
 
@@ -50,11 +53,11 @@ class RepositoryAnalyzer:
         """
         self.github_client = github_client
         self.config = self._load_config(config_path)
-        self.context_files = self.config['github']['context_files']
+        self.context_files = self.config["github"]["context_files"]
 
-    def _load_config(self, config_path: str) -> Dict[str, Any]:
+    def _load_config(self, config_path: str) -> dict[str, Any]:
         """Load configuration from YAML file."""
-        with open(config_path, 'r') as f:
+        with open(config_path) as f:
             return yaml.safe_load(f)
 
     def analyze_repository(self, repo: SearchResult) -> RepositoryContext:
@@ -66,18 +69,17 @@ class RepositoryAnalyzer:
         Returns:
             RepositoryContext with all gathered information
         """
-        context = RepositoryContext(
-            full_name=repo.full_name,
-            metadata=repo
-        )
+        context = RepositoryContext(full_name=repo.full_name, metadata=repo)
 
         # Get README
         context.readme_content = self.github_client.get_readme_content(repo.full_name)
+        if context.readme_content:
+            print(f"    • README: {len(context.readme_content)} chars")
 
         # Get file structure
+        print("    • Fetching file structure...")
         context.file_structure = self.github_client.get_repository_structure(
-            repo.full_name,
-            max_depth=2
+            repo.full_name, max_depth=2
         )
 
         # Get root directory listing
@@ -85,21 +87,29 @@ class RepositoryAnalyzer:
 
         # Try to fetch additional context files
         for file_spec in self.context_files:
-            if file_spec.endswith('/'):
+            if file_spec.endswith("/"):
                 # It's a directory - list it
-                dir_contents = self.github_client.list_directory(repo.full_name, file_spec.rstrip('/'))
+                dir_contents = self.github_client.list_directory(
+                    repo.full_name, file_spec.rstrip("/")
+                )
                 if dir_contents:
-                    context.additional_files[file_spec] = f"Directory contains: {', '.join(dir_contents)}"
+                    context.additional_files[
+                        file_spec
+                    ] = f"Directory contains: {', '.join(dir_contents)}"
+                    print(f"    • {file_spec}: {len(dir_contents)} items")
             else:
                 # It's a file - try to get content
                 content = self.github_client.get_file_content(repo.full_name, file_spec)
                 if content:
                     # Limit content length to avoid overwhelming context
-                    context.additional_files[file_spec] = content[:5000] + ("..." if len(content) > 5000 else "")
+                    context.additional_files[file_spec] = content[:5000] + (
+                        "..." if len(content) > 5000 else ""
+                    )
+                    print(f"    • {file_spec}: {len(content)} chars")
 
         return context
 
-    def extract_key_features(self, context: RepositoryContext) -> Dict[str, Any]:
+    def extract_key_features(self, context: RepositoryContext) -> dict[str, Any]:
         """Extract key features from repository context.
 
         Args:
@@ -119,16 +129,27 @@ class RepositoryAnalyzer:
 
         # Check for common important files
         important_files = [
-            "LICENSE", "CONTRIBUTING.md", "CODE_OF_CONDUCT.md",
-            "ARCHITECTURE.md", "DESIGN.md", ".github/", "docs/",
-            "examples/", "tests/", "test/"
+            "LICENSE",
+            "CONTRIBUTING.md",
+            "CODE_OF_CONDUCT.md",
+            "ARCHITECTURE.md",
+            "DESIGN.md",
+            ".github/",
+            "docs/",
+            "examples/",
+            "tests/",
+            "test/",
         ]
 
         for file_name in important_files:
-            if file_name.endswith('/'):
-                features[f"has_{file_name.rstrip('/')}"] = file_name.rstrip('/') in context.directory_listing
+            if file_name.endswith("/"):
+                features[f"has_{file_name.rstrip('/')}"] = (
+                    file_name.rstrip("/") in context.directory_listing
+                )
             else:
-                features[f"has_{file_name.lower().replace('.', '_')}"] = file_name in context.directory_listing
+                features[f"has_{file_name.lower().replace('.', '_')}"] = (
+                    file_name in context.directory_listing
+                )
 
         # Analyze directory structure depth
         features["structure_depth"] = self._calculate_structure_depth(context.file_structure)
@@ -136,15 +157,19 @@ class RepositoryAnalyzer:
         # Check for documentation indicators in README
         if context.readme_content:
             readme_lower = context.readme_content.lower()
-            features["readme_has_installation"] = "installation" in readme_lower or "install" in readme_lower
+            features["readme_has_installation"] = (
+                "installation" in readme_lower or "install" in readme_lower
+            )
             features["readme_has_usage"] = "usage" in readme_lower or "example" in readme_lower
             features["readme_has_api"] = "api" in readme_lower
-            features["readme_has_architecture"] = "architecture" in readme_lower or "design" in readme_lower
+            features["readme_has_architecture"] = (
+                "architecture" in readme_lower or "design" in readme_lower
+            )
             features["readme_has_contributing"] = "contributing" in readme_lower
 
         return features
 
-    def _calculate_structure_depth(self, structure: Dict[str, Any], current_depth: int = 0) -> int:
+    def _calculate_structure_depth(self, structure: dict[str, Any], current_depth: int = 0) -> int:
         """Calculate maximum depth of directory structure."""
         if not structure:
             return current_depth
@@ -194,19 +219,18 @@ class RepositoryAnalyzer:
 
         # Add README highlights
         if context.readme_content:
-            summary_parts.extend([
-                "",
-                f"README ({len(context.readme_content)} chars):",
-                context.readme_content[:2000] + ("..." if len(context.readme_content) > 2000 else "")
-            ])
+            summary_parts.extend(
+                [
+                    "",
+                    f"README ({len(context.readme_content)} chars):",
+                    context.readme_content[:2000]
+                    + ("..." if len(context.readme_content) > 2000 else ""),
+                ]
+            )
 
         # Add directory structure
         if context.directory_listing:
-            summary_parts.extend([
-                "",
-                "Root directory:",
-                ", ".join(context.directory_listing[:20])
-            ])
+            summary_parts.extend(["", "Root directory:", ", ".join(context.directory_listing[:20])])
 
         # Add additional files
         if context.additional_files:

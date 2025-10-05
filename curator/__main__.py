@@ -20,6 +20,22 @@ from curator.github.repo_analyzer import RepositoryAnalyzer  # noqa: E402
 from curator.outputs.report_generator import ReportGenerator  # noqa: E402
 
 
+def parse_star_count(value: Optional[str]) -> Optional[int]:
+    """Parse star count with k/m notation (e.g., '10k', '1m')."""
+    if not value:
+        return None
+
+    value = value.lower().strip()
+
+    # Handle numeric suffixes
+    if value.endswith("k"):
+        return int(float(value[:-1]) * 1000)
+    elif value.endswith("m"):
+        return int(float(value[:-1]) * 1000000)
+    else:
+        return int(value)
+
+
 @click.group()
 def cli():
     """GitHub Curator - Intelligent repository curation with metacognitive evaluation."""
@@ -33,7 +49,9 @@ def cli():
 @click.option("--config", "-c", default="config/curator.yaml", help="Configuration file path")
 @click.option("--output", "-o", default="output", help="Output directory")
 @click.option("--limit", "-l", type=int, help="Maximum repositories to evaluate")
-@click.option("--min-stars", type=int, help="Minimum stars (overrides config)")
+@click.option(
+    "--min-stars", help="Minimum stars - supports 1k, 10k, 1m notation (overrides config)"
+)
 @click.option(
     "--max-age-days", type=int, help="Maximum age in days since last push (overrides config)"
 )
@@ -45,7 +63,7 @@ def curate(
     config: str,
     output: str,
     limit: Optional[int],
-    min_stars: Optional[int],
+    min_stars: Optional[str],
     max_age_days: Optional[int],
     trace: bool,
 ):
@@ -99,7 +117,7 @@ def curate(
     # Step 3: Search repositories
     click.echo("🔎 Searching GitHub...")
     try:
-        min_stars_val = min_stars or intent.constraints.min_stars
+        min_stars_val = parse_star_count(min_stars) or intent.constraints.min_stars
         # Convert days to months if specified
         max_age_months = (
             int(max_age_days / 30) if max_age_days else intent.constraints.max_age_months
@@ -128,18 +146,29 @@ def curate(
 
     # Step 4: Analyze and evaluate
     click.echo("🧠 Evaluating repositories...")
+    click.echo("")
     evaluations = []
 
     try:
-        with click.progressbar(repos, label="Analyzing") as bar:
-            for repo in bar:
-                # Gather context
-                context = analyzer.analyze_repository(repo)
-                context_summary = analyzer.get_evaluation_context_summary(context)
+        for idx, repo in enumerate(repos, 1):
+            click.echo(f"[{idx}/{len(repos)}] {repo.full_name}")
 
-                # Evaluate
-                evaluation = evaluator.evaluate_repository(context, intent, context_summary)
-                evaluations.append(evaluation)
+            # Gather context
+            click.echo("  → Fetching README...")
+            context = analyzer.analyze_repository(repo)
+
+            click.echo("  → Generating context summary...")
+            context_summary = analyzer.get_evaluation_context_summary(context)
+
+            # Evaluate
+            click.echo("  → Evaluating with Claude...")
+            evaluation = evaluator.evaluate_repository(context, intent, context_summary)
+            evaluations.append(evaluation)
+
+            click.echo(
+                f"  ✓ Score: {evaluation.overall_relevance:.2f}, Confidence: {evaluation.confidence:.2f}"
+            )
+            click.echo("")
     except KeyboardInterrupt:
         click.echo("\n\n⚠️  Evaluation interrupted by user", err=True)
         if evaluations:
