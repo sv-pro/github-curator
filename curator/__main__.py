@@ -384,6 +384,215 @@ def collect(
         raise click.Abort() from None
 
 
+def _print_topic_suggestions(context, suggestions, compare):
+    """Print topic suggestions in text format."""
+    click.echo(f"📊 Topic Analysis: {context.full_name}")
+    click.echo("")
+
+    # Show current topics if compare mode
+    if compare and context.metadata.topics:
+        click.echo(f"Current Topics ({len(context.metadata.topics)}):")
+        click.echo(f"  {', '.join(context.metadata.topics)}")
+        click.echo("")
+
+    # Group suggestions by confidence
+    high_conf = [s for s in suggestions if s.confidence >= 0.8]
+    med_conf = [s for s in suggestions if 0.6 <= s.confidence < 0.8]
+    low_conf = [s for s in suggestions if 0.5 <= s.confidence < 0.6]
+
+    click.echo(f"Suggested Topics ({len(suggestions)}):")
+    click.echo("")
+
+    if high_conf:
+        click.echo("High Confidence (≥0.8):")
+        for s in high_conf:
+            status = "✓" if s.already_assigned else "✨"
+            sources = ", ".join(s.sources)
+            click.echo(f"  {status} {s.topic} ({s.confidence:.2f})")
+            click.echo(f"     {s.reasoning}")
+            click.echo(f"     Sources: {sources}")
+            click.echo("")
+
+    if med_conf:
+        click.echo("Medium Confidence (0.6-0.8):")
+        for s in med_conf:
+            status = "✓" if s.already_assigned else "💡"
+            sources = ", ".join(s.sources)
+            click.echo(f"  {status} {s.topic} ({s.confidence:.2f})")
+            click.echo(f"     {s.reasoning}")
+            click.echo("")
+
+    if low_conf:
+        click.echo("Lower Confidence (0.5-0.6):")
+        for s in low_conf:
+            status = "✓" if s.already_assigned else "🤔"
+            click.echo(f"  {status} {s.topic} ({s.confidence:.2f}) - {s.reasoning}")
+
+
+@cli.command()
+@click.argument("repo")  # owner/repo format
+@click.option("--compare", is_flag=True, help="Show current topics vs AI suggestions")
+@click.option("--from-curation", help="Load knowledge from curation results directory")
+@click.option("--knowledge-base", default=".curator/knowledge", help="Knowledge base directory")
+@click.option("--min-confidence", type=float, default=0.5, help="Minimum confidence threshold")
+@click.option("--output", "-o", help="Output file path (JSON format)")
+@click.option(
+    "--format",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="Output format",
+)
+@click.option("--config", "-c", default="config/curator.yaml", help="Configuration file path")
+@click.option(
+    "--use-git-clone", is_flag=True, help="Clone repo locally instead of using GitHub API"
+)
+def mark(
+    repo: str,
+    compare: bool,
+    from_curation: Optional[str],
+    knowledge_base: str,
+    min_confidence: float,
+    output: Optional[str],
+    format: str,
+    config: str,
+    use_git_clone: bool,
+):
+    """Analyze repository and suggest relevant topics.
+
+    REPO: Repository in owner/repo format (e.g., fastapi/fastapi)
+
+    By default, operates in BLIND MODE - analyzes the repository WITHOUT
+    looking at existing topics. Use --compare to see current vs suggested topics.
+
+    Examples:
+
+        # Blind mode analysis (default)
+        curator mark fastapi/fastapi
+
+        # Compare with existing topics
+        curator mark fastapi/fastapi --compare
+
+        # Load knowledge from curation results
+        curator mark fastapi/fastapi --from-curation output/
+
+        # Save results to file
+        curator mark fastapi/fastapi --output results.json --format json
+    """
+    import json
+    from datetime import datetime
+
+    import yaml
+    from anthropic import Anthropic
+
+    from curator.core.topic_inference import TopicInferenceEngine
+    from curator.knowledge import KnowledgeBase
+
+    click.echo(f"🏷️  Analyzing topics for: {repo}")
+    click.echo("")
+
+    try:
+        # Load config
+        with open(config) as f:
+            cfg = yaml.safe_load(f)
+
+        # Initialize components
+        github_client = GitHubAPIClient(config)
+        analyzer = RepositoryAnalyzer(github_client, config, use_git_clone=use_git_clone)
+        anthropic_client = Anthropic()
+        model = cfg["anthropic"]["model"]
+
+        # Initialize knowledge base
+        kb = KnowledgeBase(base_path=knowledge_base)
+
+        # Load from curation if specified
+        if from_curation:
+            click.echo(f"📚 Loading knowledge from: {from_curation}")
+            kb.load_from_curation(Path(from_curation))
+            kb.learn_patterns()
+            kb.save()
+
+        kb_stats = kb.get_stats()
+        click.echo(
+            f"   Knowledge base: {kb_stats['total_repositories']} repos, {kb_stats['total_patterns']} patterns"
+        )
+        click.echo("")
+
+        # Fetch repository
+        click.echo("📊 Fetching repository data...")
+        from curator.github.api_client import SearchResult
+
+        gh_repo = github_client.get_repository(repo)
+        search_result = SearchResult(
+            name=gh_repo.name,
+            owner=gh_repo.owner.login,
+            full_name=gh_repo.full_name,
+            description=gh_repo.description or "",
+            url=gh_repo.html_url,
+            stars=gh_repo.stargazers_count,
+            last_updated=gh_repo.pushed_at,
+            language=gh_repo.language or "Unknown",
+            license_name=gh_repo.license.name if gh_repo.license else None,
+            topics=list(gh_repo.get_topics()),
+        )
+
+        # Analyze repository
+        click.echo("🔍 Analyzing repository content...")
+        context = analyzer.analyze_repository(search_result)
+
+        # Extract features
+        features = analyzer.extract_key_features(context)
+
+        # Initialize inference engine
+        inference = TopicInferenceEngine(kb, anthropic_client, model)
+
+        # Infer topics (blind mode by default)
+        click.echo("🤖 Inferring topics with AI...")
+        suggestions = inference.infer_topics(context, features, blind_mode=not compare)
+
+        # Filter by confidence
+        suggestions = [s for s in suggestions if s.confidence >= min_confidence]
+
+        click.echo("")
+
+        # Output results
+        if format == "json":
+            result = {
+                "repository": repo,
+                "analyzed_at": datetime.utcnow().isoformat(),
+                "current_topics": list(context.metadata.topics) if compare else None,
+                "suggestions": [s.to_dict() for s in suggestions],
+                "knowledge_base": kb_stats,
+            }
+
+            if output:
+                Path(output).parent.mkdir(parents=True, exist_ok=True)
+                with open(output, "w") as f:
+                    json.dump(result, f, indent=2)
+                click.echo(f"✓ Results saved to: {output}")
+            else:
+                click.echo(json.dumps(result, indent=2))
+
+        else:  # text format
+            _print_topic_suggestions(context, suggestions, compare)
+
+            if output:
+                # Save as JSON even in text mode if output specified
+                result = {
+                    "repository": repo,
+                    "analyzed_at": datetime.utcnow().isoformat(),
+                    "current_topics": list(context.metadata.topics) if compare else None,
+                    "suggestions": [s.to_dict() for s in suggestions],
+                }
+                Path(output).parent.mkdir(parents=True, exist_ok=True)
+                with open(output, "w") as f:
+                    json.dump(result, f, indent=2)
+                click.echo(f"\n✓ Results also saved to: {output}")
+
+    except Exception as e:
+        click.echo(f"\n❌ Error: {type(e).__name__}: {e}", err=True)
+        raise click.Abort() from None
+
+
 @cli.command()
 @click.argument("intent_id")
 @click.option("--output", "-o", default="output", help="Output directory")
