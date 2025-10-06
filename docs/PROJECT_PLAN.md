@@ -70,25 +70,35 @@ Build an intelligent GitHub repository curator that demonstrates IntentHub princ
 **Timeline**: 4-6 weeks
 **Goal**: Modern, scalable, intelligent curation platform
 
-#### Phase 1: Foundation (Week 1)
+#### Phase 1: Foundation (Week 1) ✅ **COMPLETE**
 **Focus**: Restore features + improve architecture
 
-- [ ] Restore `mark` and `collect` commands
-- [ ] Fix error detection (Anthropic/GitHub/generic)
-- [ ] Implement LangChain provider abstraction
-- [ ] Support multiple LLM providers (Anthropic/OpenAI/Ollama/Google)
+- [x] Restore `mark` and `collect` commands
+- [x] Fix error detection (Anthropic/GitHub/generic)
+- [x] Implement LangChain provider abstraction
+- [x] Support multiple LLM providers (Anthropic/OpenAI/Ollama/Google)
+- [x] Fix configuration compatibility bugs
 
-**Deliverables**: All original features restored with better error handling
+**Deliverables**: ✅ All original features restored with better error handling
 
-#### Phase 2: Semantic Search (Week 2)
-**Focus**: Add vector database for intelligent search
+#### Phase 2: Cost Tracking + Semantic Search (Week 2)
+**Focus**: Add cost awareness and vector database for intelligent search
 
+**Cost Tracking**:
+- [ ] Create cost calculator with provider pricing
+- [ ] Track token usage per command
+- [ ] Display cost summary after commands
+- [ ] Add cost comparison tips
+
+**Semantic Search**:
 - [ ] Integrate ChromaDB for embeddings
 - [ ] Implement semantic repository search
 - [ ] Add "find similar repos" functionality
 - [ ] Migrate existing knowledge base to vector store
 
-**Deliverables**: Semantic search like "find repos similar to FastAPI"
+**Deliverables**:
+- Cost display after each command (curate/mark/collect)
+- Semantic search like "find repos similar to FastAPI"
 
 #### Phase 3: Graph Relationships (Week 3)
 **Focus**: Add graph database for pattern discovery
@@ -130,8 +140,8 @@ Build an intelligent GitHub repository curator that demonstrates IntentHub princ
 | Command | Status | Priority | Details |
 |---------|--------|----------|---------|
 | `curate` | ✅ Implemented | P0 | Main curation workflow |
-| `mark` | ⚠️ Missing | P1 | AI-powered topic inference → [Restore plan](features/mark-command.md) |
-| `collect` | ⚠️ Missing | P1 | Knowledge base building → [Restore plan](features/collect-command.md) |
+| `mark` | ✅ Restored | P1 | AI-powered topic inference → [Restore plan](features/mark-command.md) |
+| `collect` | ✅ Restored | P1 | Knowledge base building → [Restore plan](features/collect-command.md) |
 | `show` | ✅ Implemented | P2 | Display past curations |
 | `setup` | ✅ Implemented | P0 | Environment validation |
 | `validate-config` | ✅ Implemented | P2 | Config validation |
@@ -141,8 +151,10 @@ Build an intelligent GitHub repository curator that demonstrates IntentHub princ
 | Feature | Status | Priority | Details |
 |---------|--------|----------|---------|
 | Declarative Pipeline | 🚧 Phase 1 Done | P0 | → [Pipeline Plan](features/declarative-pipeline.md) |
+| Multi-Provider LLM | ✅ Implemented | P0 | Anthropic/OpenAI/Google/Ollama → [LLM Providers](LLM_PROVIDERS.md) |
+| Error Detection | ✅ Implemented | P0 | Structured error hierarchy with solutions |
+| Cost Tracking | 📋 Planned | P1 | Show API costs per command → [Cost Tracking](features/cost-tracking.md) |
 | Hybrid Storage | 📋 Designed | P1 | → [Storage Plan](features/hybrid-storage.md) |
-| LLM Abstraction | 📋 Designed | P1 | → [LLM Plan](features/llm-abstraction.md) |
 | Vector Search | 📋 Planned | P1 | Part of hybrid storage |
 | Graph DB | 📋 Planned | P2 | Part of hybrid storage |
 | RAG Analysis | 📋 Planned | P3 | Future enhancement |
@@ -151,9 +163,8 @@ Build an intelligent GitHub repository curator that demonstrates IntentHub princ
 
 | Feature | Status | Priority | Details |
 |---------|--------|----------|---------|
-| Error Detection | 🚧 Improved | P0 | Better cause detection |
 | Testing | ⚠️ Minimal | P1 | Need comprehensive suite |
-| Documentation | ⚠️ Scattered | P1 | Consolidation needed |
+| Documentation | 🚧 Improving | P1 | Multi-provider & cost docs added |
 | CI/CD | ❌ Missing | P2 | GitHub Actions |
 | Docker | ❌ Missing | P3 | Containerization |
 
