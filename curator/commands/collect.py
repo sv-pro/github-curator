@@ -34,7 +34,7 @@ def parse_repo_spec(repo_spec: str) -> str:
 
 
 def collect_repositories(
-    topic: Optional[str] = None,
+    topics: Optional[list[str]] = None,
     specific_repos: Optional[list[str]] = None,
     limit: int = 100,
     min_stars: int = 50,
@@ -47,9 +47,9 @@ def collect_repositories(
     """Collect repositories and add to knowledge base.
 
     Args:
-        topic: GitHub topic to search for
+        topics: List of GitHub topics to search for
         specific_repos: List of specific repos to add (owner/repo or URLs)
-        limit: Maximum number of repos to collect
+        limit: Maximum number of repos per topic to collect
         min_stars: Minimum star count for topic search
         language: Filter by programming language
         knowledge_base_path: Path to knowledge base directory
@@ -107,44 +107,47 @@ def collect_repositories(
         click.echo("")
 
     # Handle topic search
-    if topic:
-        click.echo(f"🔍 Searching GitHub for topic:{topic}...")
+    if topics:
+        for topic in topics:
+            click.echo(f"🔍 Searching GitHub for topic:{topic}...")
 
-        # Build search query
-        query_parts = [f"topic:{topic}"]
-        if min_stars:
-            query_parts.append(f"stars:>={min_stars}")
-        if language:
-            query_parts.append(f"language:{language}")
+            # Build search query
+            query_parts = [f"topic:{topic}"]
+            if min_stars:
+                query_parts.append(f"stars:>={min_stars}")
+            if language:
+                query_parts.append(f"language:{language}")
 
-        query = " ".join(query_parts)
-        click.echo(f"   Query: {query}")
+            query = " ".join(query_parts)
+            click.echo(f"   Query: {query}")
 
-        try:
-            # Search repositories
-            search_results = github_client.search_repositories(query, limit=limit)
-            click.echo(f"   Found {len(search_results)} repositories")
+            try:
+                # Search repositories
+                search_results = github_client.search_repositories(query, limit=limit)
+                click.echo(f"   Found {len(search_results)} repositories")
 
-            # Convert search results to dict format
-            for result in search_results:
-                repos_to_process.append(
-                    {
-                        "full_name": result.full_name,
-                        "name": result.name,
-                        "owner": result.owner,
-                        "description": result.description,
-                        "url": result.url,
-                        "stars": result.stars,
-                        "language": result.language,
-                        "topics": result.topics,
-                    }
-                )
+                # Convert search results to dict format
+                for result in search_results:
+                    # Check if we already have this repo from another topic
+                    if not any(r["full_name"] == result.full_name for r in repos_to_process):
+                        repos_to_process.append(
+                            {
+                                "full_name": result.full_name,
+                                "name": result.name,
+                                "owner": result.owner,
+                                "description": result.description,
+                                "url": result.url,
+                                "stars": result.stars,
+                                "language": result.language,
+                                "topics": result.topics,
+                            }
+                        )
 
-        except Exception as e:
-            click.echo(f"   ⚠️  Search failed: {e}", err=True)
-            errors.append({"topic": topic, "error": str(e)})
+            except Exception as e:
+                click.echo(f"   ⚠️  Search failed: {e}", err=True)
+                errors.append({"topic": topic, "error": str(e)})
 
-        click.echo("")
+            click.echo("")
 
     # Process repositories
     total = len(repos_to_process)

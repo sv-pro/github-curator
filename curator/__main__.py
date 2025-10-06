@@ -279,9 +279,11 @@ def curate(
 
 
 @cli.command()
-@click.argument("topic", required=False)
+@click.argument("topics", nargs=-1)
 @click.option("--repo", "-r", multiple=True, help="Specific repo(s) to add (owner/repo or URL)")
-@click.option("--limit", "-l", type=int, default=100, help="Maximum number of repos to collect")
+@click.option(
+    "--limit", "-l", type=int, default=100, help="Maximum number of repos per topic to collect"
+)
 @click.option("--min-stars", type=int, default=50, help="Minimum stars")
 @click.option("--knowledge-base", default=".curator/knowledge", help="Knowledge base directory")
 @click.option("--language", help="Filter by programming language")
@@ -291,7 +293,7 @@ def curate(
 )
 @click.option("--config", "-c", default="config/curator.yaml", help="Configuration file path")
 def collect(
-    topic: Optional[str],
+    topics: tuple[str, ...],
     repo: tuple[str, ...],
     limit: int,
     min_stars: int,
@@ -303,7 +305,7 @@ def collect(
 ):
     """Collect repositories and add to knowledge base.
 
-    TOPIC: GitHub topic to search for (e.g., "machine-learning", "web-framework")
+    TOPICS: One or more GitHub topics to search for (e.g., "async", "web-framework")
 
     Use --repo to add specific repositories instead of searching by topic.
     Supports both formats: owner/repo or https://github.com/owner/repo
@@ -313,13 +315,20 @@ def collect(
 
     Examples:
 
+        # Single topic
         curator collect async --language python
 
+        # Multiple topics
+        curator collect async asyncio concurrency --language python
+
+        # Specific repositories
         curator collect --repo fastapi/fastapi --repo django/django
 
+        # URL format
         curator collect --repo https://github.com/pallets/flask
 
-        curator collect async --refresh  # Update existing async repos
+        # Refresh existing
+        curator collect async --refresh
 
     This builds a corpus of repositories in the knowledge base that can be used
     by the 'mark' command for better topic inference.
@@ -327,23 +336,28 @@ def collect(
     from curator.commands import collect_repositories
 
     # Validate inputs
-    if not topic and not repo:
-        click.echo("❌ Either TOPIC or --repo must be provided", err=True)
+    if not topics and not repo:
+        click.echo("❌ Either TOPICS or --repo must be provided", err=True)
         raise click.Abort()
 
-    if topic and repo:
-        click.echo("⚠️  Both topic and --repo provided, will collect both")
+    if topics and repo:
+        click.echo("⚠️  Both topics and --repo provided, will collect both")
         click.echo("")
 
-    if topic:
-        click.echo(f"📚 Collecting repositories with topic: {topic}")
+    if topics:
+        if len(topics) == 1:
+            click.echo(f"📚 Collecting repositories with topic: {topics[0]}")
+        else:
+            click.echo(f"📚 Collecting repositories with {len(topics)} topics:")
+            for topic in topics:
+                click.echo(f"   • {topic}")
     else:
         click.echo(f"📚 Collecting {len(repo)} specific repository/ies")
     click.echo("")
 
     try:
         result = collect_repositories(
-            topic=topic,
+            topics=list(topics) if topics else None,
             specific_repos=list(repo) if repo else None,
             limit=limit,
             min_stars=min_stars,
