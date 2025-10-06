@@ -67,7 +67,7 @@ class GitHubAPIClient:
         query: str,
         min_stars: int = 50,
         max_age_months: int = 6,
-        requires_license: bool = True,
+        requires_license: bool = False,
         language: Optional[str] = None,
         limit: Optional[int] = None,
     ) -> list[SearchResult]:
@@ -77,7 +77,7 @@ class GitHubAPIClient:
             query: Search query string
             min_stars: Minimum number of stars
             max_age_months: Maximum age in months since last update
-            requires_license: Whether license is required
+            requires_license: Whether license is required (default: False)
             language: Filter by programming language
             limit: Maximum number of results
 
@@ -121,12 +121,13 @@ class GitHubAPIClient:
 
                 self._check_rate_limit()
 
-                # Filter by license if required
+                # Filter by license if explicitly required
                 if requires_license and not repo.license:
                     print(f"  ⊘ Skipping {repo.full_name} - no license")
                     continue
 
-                print(f"  ✓ Found: {repo.full_name} (⭐ {repo.stargazers_count})")
+                license_info = f", license: {repo.license.name}" if repo.license else ", no license"
+                print(f"  ✓ Found: {repo.full_name} (⭐ {repo.stargazers_count}{license_info})")
                 results.append(
                     SearchResult(
                         full_name=repo.full_name,
