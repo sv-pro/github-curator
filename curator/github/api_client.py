@@ -9,6 +9,13 @@ from typing import Any, Optional
 import yaml
 from github import Github, GithubException, Repository
 
+from curator.errors import (
+    GitHubAPIError,
+    GitHubAuthenticationError,
+    GitHubNotFoundError,
+    GitHubRateLimitError,
+)
+
 
 @dataclass
 class SearchResult:
@@ -39,9 +46,27 @@ class GitHubAPIClient:
         self.config = self._load_config(config_path)
         api_token = token or os.getenv("GITHUB_TOKEN")
         if not api_token:
-            raise ValueError("GitHub token required. Set GITHUB_TOKEN environment variable.")
+            raise GitHubAuthenticationError(
+                "GitHub token required",
+                details={
+                    "solution": "Set GITHUB_TOKEN environment variable or pass token parameter"
+                },
+            )
 
-        self.client = Github(api_token)
+        try:
+            self.client = Github(api_token)
+            # Test authentication
+            _login = self.client.get_user().login  # noqa: F841
+        except GithubException as e:
+            if e.status == 401:
+                raise GitHubAuthenticationError(
+                    "Invalid GitHub token",
+                    details={"status_code": e.status, "message": str(e)},
+                ) from e
+            raise GitHubAPIError(
+                f"Failed to initialize GitHub client: {e}", status_code=e.status
+            ) from e
+
         self.rate_limit_buffer = self.config["github"]["rate_limit_buffer"]
         self.search_limit = self.config["github"]["search_limit"]
 
@@ -52,15 +77,23 @@ class GitHubAPIClient:
 
     def _check_rate_limit(self):
         """Check rate limit and sleep if necessary."""
-        rate_limit = self.client.get_rate_limit()
-        remaining = rate_limit.resources.core.remaining
+        try:
+            rate_limit = self.client.get_rate_limit()
+            remaining = rate_limit.resources.core.remaining
 
-        if remaining < self.rate_limit_buffer:
-            reset_time = rate_limit.resources.core.reset
-            sleep_time = (reset_time - datetime.now()).total_seconds() + 10
-            if sleep_time > 0:
-                print(f"Rate limit approaching. Sleeping for {sleep_time:.0f} seconds...")
-                time.sleep(sleep_time)
+            if remaining < self.rate_limit_buffer:
+                reset_time = rate_limit.resources.core.reset
+                sleep_time = (reset_time - datetime.now()).total_seconds() + 10
+                if sleep_time > 0:
+                    print(f"Rate limit approaching. Sleeping for {sleep_time:.0f} seconds...")
+                    time.sleep(sleep_time)
+        except GithubException as e:
+            if e.status == 403 and "rate limit" in str(e).lower():
+                raise GitHubRateLimitError(
+                    reset_time=str(e.data.get("reset")) if hasattr(e, "data") else None,
+                    details={"message": str(e)},
+                ) from e
+            raise
 
     def search_repositories(
         self,
@@ -148,8 +181,25 @@ class GitHubAPIClient:
             return results
 
         except GithubException as e:
-            print(f"GitHub API error: {e}")
-            raise
+            # Map GitHub exceptions to our error hierarchy
+            if e.status == 401:
+                raise GitHubAuthenticationError(
+                    "Authentication failed during search",
+                    details={"query": full_query, "status_code": e.status},
+                ) from e
+            elif e.status == 403 and "rate limit" in str(e).lower():
+                raise GitHubRateLimitError(details={"query": full_query, "message": str(e)}) from e
+            elif e.status == 404:
+                raise GitHubNotFoundError(
+                    f"Search query returned no results: {full_query}",
+                    details={"query": full_query},
+                ) from e
+            else:
+                raise GitHubAPIError(
+                    f"GitHub API error during search: {e}",
+                    status_code=e.status,
+                    details={"query": full_query},
+                ) from e
 
     def get_repository(self, full_name: str) -> Repository.Repository:
         """Get repository object by full name.
@@ -178,8 +228,15 @@ class GitHubAPIClient:
             repo = self.get_repository(full_name)
             readme = repo.get_readme()
             return readme.decoded_content.decode("utf-8")
-        except GithubException:
-            return None
+        except GithubException as e:
+            if e.status == 404:
+                return None  # README not found is expected
+            # Re-raise other errors (auth, rate limit, etc)
+            raise GitHubAPIError(
+                f"Error fetching README for {full_name}: {e}",
+                status_code=e.status,
+                details={"repository": full_name},
+            ) from e
 
     def get_file_content(self, full_name: str, file_path: str) -> Optional[str]:
         """Get content of a specific file.

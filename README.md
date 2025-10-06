@@ -67,6 +67,12 @@ pip install -e .
 # For development (includes testing, linting, type checking)
 pip install -e ".[dev]"
 
+# Optional: Install additional LLM providers
+pip install -e ".[openai]"        # OpenAI support
+pip install -e ".[google]"        # Google Gemini support
+pip install -e ".[ollama]"        # Ollama (local) support
+pip install -e ".[all-providers]" # All providers
+
 # Or use Make
 make install      # production
 make install-dev  # development
@@ -75,7 +81,11 @@ make install-dev  # development
 ### Prerequisites
 
 - Python 3.9 or higher
-- Anthropic API key ([get one here](https://console.anthropic.com/))
+- **LLM API Key** (choose one):
+  - Anthropic Claude API key ([get one here](https://console.anthropic.com/)) - **Default**
+  - OpenAI API key ([get one here](https://platform.openai.com/api-keys))
+  - Google API key ([get one here](https://makersuite.google.com/app/apikey))
+  - Ollama ([install locally](https://ollama.com)) - Free, no API key needed
 - GitHub Personal Access Token ([create one here](https://github.com/settings/tokens))
 
 ### Environment Setup
@@ -85,13 +95,28 @@ make install-dev  # development
 cp .env.example .env
 
 # Edit .env and add your API keys
+# Default: Anthropic Claude
 ANTHROPIC_API_KEY=your_key_here
 GITHUB_TOKEN=your_token_here
+
+# OR use a different LLM provider:
+# CURATOR_LLM_PROVIDER=openai
+# OPENAI_API_KEY=your_key_here
+
+# OR use Google Gemini:
+# CURATOR_LLM_PROVIDER=google
+# GOOGLE_API_KEY=your_key_here
+
+# OR use Ollama (local, free):
+# CURATOR_LLM_PROVIDER=ollama
+# (No API key needed, just install and run Ollama)
 
 # Verify setup
 python -m curator setup
 # Or: make setup
 ```
+
+See [LLM Provider Guide](docs/LLM_PROVIDERS.md) for detailed configuration options.
 
 ## Configuration
 

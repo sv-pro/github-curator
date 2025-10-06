@@ -36,6 +36,32 @@ evaluation:
   confidence_threshold_low: 0.4
   min_indicators_found: 2
 
+llm:
+  # Default provider: anthropic, openai, google, ollama
+  # Can be overridden with CURATOR_LLM_PROVIDER environment variable
+  provider: anthropic
+
+  # Use LangChain for unified provider interface (recommended)
+  use_langchain: true
+
+  # Model configuration (optional, uses provider defaults if not specified)
+  models:
+    anthropic: claude-sonnet-4-5-20250929
+    openai: gpt-4o
+    google: gemini-2.0-flash-exp
+    ollama: llama3.3
+
+  # Provider-specific settings
+  providers:
+    ollama:
+      base_url: http://localhost:11434
+
+  # Fallback providers (if primary fails)
+  fallback_enabled: false
+  fallback_providers:
+    - openai
+    - google
+
 validation:
   strict_mode: false
   fail_on_warnings: false
