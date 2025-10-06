@@ -143,12 +143,27 @@ def curate(
         click.echo(f"   Selected {len(repos)} candidate repositories for evaluation")
         click.echo("")
     except Exception as e:
-        click.echo("\n❌ Error searching GitHub:", err=True)
-        click.echo(f"   {type(e).__name__}: {e}", err=True)
-        click.echo("\nTroubleshooting:", err=True)
-        click.echo("  - Check your GITHUB_TOKEN is valid", err=True)
-        click.echo("  - Verify you haven't exceeded GitHub API rate limits", err=True)
-        click.echo("  - Check your internet connection", err=True)
+        error_msg = str(e)
+        error_type = type(e).__name__
+
+        # Detect specific error types for better troubleshooting
+        if "credit balance" in error_msg.lower() or "anthropic api" in error_msg.lower():
+            click.echo("\n❌ Anthropic API Error:", err=True)
+            click.echo(f"   {error_type}: {e}", err=True)
+            click.echo("\nTroubleshooting:", err=True)
+            click.echo("  - Check your ANTHROPIC_API_KEY is valid", err=True)
+            click.echo("  - Verify your Anthropic account has sufficient credits", err=True)
+            click.echo("  - Visit https://console.anthropic.com/settings/billing", err=True)
+        elif "github" in error_msg.lower() or "rate limit" in error_msg.lower():
+            click.echo("\n❌ GitHub API Error:", err=True)
+            click.echo(f"   {error_type}: {e}", err=True)
+            click.echo("\nTroubleshooting:", err=True)
+            click.echo("  - Check your GITHUB_TOKEN is valid", err=True)
+            click.echo("  - Verify you haven't exceeded GitHub API rate limits", err=True)
+            click.echo("  - Check your internet connection", err=True)
+        else:
+            click.echo("\n❌ Error during search:", err=True)
+            click.echo(f"   {error_type}: {e}", err=True)
         raise click.Abort() from None
 
     if not repos:
