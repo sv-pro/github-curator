@@ -35,6 +35,8 @@ dependencies = [
     "python-dateutil>=2.8.0",
     "click>=8.1.0",
     "python-dotenv>=1.0.0",
+    "prefect>=3.4.0",
+    "prefect-github>=0.3.0",
 ]
 
 [project.optional-dependencies]
@@ -87,6 +89,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]  # unused imports in __init__.py
 "curator/__main__.py" = ["E402"]  # module level imports not at top (needed for dotenv)
+"examples/*.py" = ["E402"]  # module level imports not at top (needed for dotenv)
 
 [tool.mypy]
 python_version = "3.9"

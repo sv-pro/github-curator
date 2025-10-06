@@ -61,6 +61,11 @@ htmlcov/
 .cache/
 *.cache
 
+# Prefect cache and results
+.prefect-cache/
+.prefect-results/
+.prefect/
+
 # Output directories
 output
 outputs/

@@ -1,0 +1,55 @@
+# Prefect Configuration for GitHub Curator
+
+# Result storage configuration
+results:
+  persist_by_default: true
+  storage:
+    type: "local"
+    path: ".prefect-results/"
+
+# Default task settings
+tasks:
+  default_cache_expiration: 604800  # 7 days in seconds
+  default_retry_delay: 10  # seconds
+  max_retries: 3
+
+# Task runner configuration
+task_runner:
+  type: "concurrent"
+  max_workers: 10
+
+# Task-specific configuration
+task_configs:
+  structure_intent:
+    cache_expiration: 604800  # 7 days
+    max_concurrent: 1
+    retries: 3
+
+  search_repos:
+    cache_expiration: 3600  # 1 hour
+    max_concurrent: 1
+    retries: 3
+
+  analyze_repo:
+    cache_expiration: 2592000  # 30 days
+    max_concurrent: 5  # Respect GitHub rate limits
+    retries: 3
+
+  evaluate_repo:
+    cache_expiration: 2592000  # 30 days
+    max_concurrent: 3  # LLM API limits
+    retries: 3
+    retry_delay: 30  # Longer delay for API rate limits
+
+# Cache configuration
+cache:
+  enabled: true
+  type: "local"
+  path: ".prefect-cache/"
+  max_size_mb: 1000  # 1GB max cache size
+  cleanup_interval: 86400  # Daily cleanup in seconds
+
+# Logging configuration
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
