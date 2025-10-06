@@ -82,6 +82,10 @@ traces/
 github_token.txt
 *.secret
 
+# Generated knowledge base files
+.curator/knowledge/*.json
+.curator/knowledge/*.jsonl
+
 # MacOS
 .DS_Store
 .AppleDouble
