@@ -279,6 +279,98 @@ def curate(
 
 
 @cli.command()
+@click.argument("topic", required=False)
+@click.option("--repo", "-r", multiple=True, help="Specific repo(s) to add (owner/repo or URL)")
+@click.option("--limit", "-l", type=int, default=100, help="Maximum number of repos to collect")
+@click.option("--min-stars", type=int, default=50, help="Minimum stars")
+@click.option("--knowledge-base", default=".curator/knowledge", help="Knowledge base directory")
+@click.option("--language", help="Filter by programming language")
+@click.option("--refresh", is_flag=True, help="Refresh existing repos (default: skip duplicates)")
+@click.option(
+    "--use-git-clone", is_flag=True, help="Clone repos locally instead of using GitHub API (faster)"
+)
+@click.option("--config", "-c", default="config/curator.yaml", help="Configuration file path")
+def collect(
+    topic: Optional[str],
+    repo: tuple[str, ...],
+    limit: int,
+    min_stars: int,
+    knowledge_base: str,
+    language: Optional[str],
+    refresh: bool,
+    use_git_clone: bool,
+    config: str,
+):
+    """Collect repositories and add to knowledge base.
+
+    TOPIC: GitHub topic to search for (e.g., "machine-learning", "web-framework")
+
+    Use --repo to add specific repositories instead of searching by topic.
+    Supports both formats: owner/repo or https://github.com/owner/repo
+
+    By default, skips repositories already in the knowledge base.
+    Use --refresh to update existing repos with latest data.
+
+    Examples:
+
+        curator collect async --language python
+
+        curator collect --repo fastapi/fastapi --repo django/django
+
+        curator collect --repo https://github.com/pallets/flask
+
+        curator collect async --refresh  # Update existing async repos
+
+    This builds a corpus of repositories in the knowledge base that can be used
+    by the 'mark' command for better topic inference.
+    """
+    from curator.commands import collect_repositories
+
+    # Validate inputs
+    if not topic and not repo:
+        click.echo("❌ Either TOPIC or --repo must be provided", err=True)
+        raise click.Abort()
+
+    if topic and repo:
+        click.echo("⚠️  Both topic and --repo provided, will collect both")
+        click.echo("")
+
+    if topic:
+        click.echo(f"📚 Collecting repositories with topic: {topic}")
+    else:
+        click.echo(f"📚 Collecting {len(repo)} specific repository/ies")
+    click.echo("")
+
+    try:
+        result = collect_repositories(
+            topic=topic,
+            specific_repos=list(repo) if repo else None,
+            limit=limit,
+            min_stars=min_stars,
+            language=language,
+            knowledge_base_path=knowledge_base,
+            refresh_existing=refresh,
+            use_git_clone=use_git_clone,
+            config_path=config,
+        )
+
+        # Display summary
+        if result.get("errors"):
+            click.echo(f"\n⚠️  Warnings: {len(result['errors'])} repositories failed", err=True)
+
+    except Exception as e:
+        error_msg = str(e)
+        if "github" in error_msg.lower() or "rate limit" in error_msg.lower():
+            click.echo("\n❌ GitHub API Error:", err=True)
+            click.echo(f"   {type(e).__name__}: {e}", err=True)
+            click.echo("  - Check GITHUB_TOKEN is valid and has sufficient rate limit", err=True)
+            click.echo("  - GitHub rate limit: 5000 req/hour (authenticated)", err=True)
+        else:
+            click.echo(f"\n❌ Error collecting repositories: {e}", err=True)
+        raise click.Abort() from None
+
+
+@cli.command()
 @click.argument("intent_id")
 @click.option("--output", "-o", default="output", help="Output directory")
 def show(intent_id: str, output: str):
