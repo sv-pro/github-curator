@@ -86,7 +86,7 @@ class KnowledgeBase:
             with open(self.patterns_file) as f:
                 patterns_data = json.load(f)
                 self.topic_patterns = {
-                    topic: TopicPattern.from_dict(pattern_data)
+                    topic: TopicPattern.from_dict({**pattern_data, "topic": topic})
                     for topic, pattern_data in patterns_data.items()
                 }
 

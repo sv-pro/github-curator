@@ -498,8 +498,21 @@ def mark(
         # Initialize components
         github_client = GitHubAPIClient(config)
         analyzer = RepositoryAnalyzer(github_client, config, use_git_clone=use_git_clone)
-        anthropic_client = Anthropic()
-        model = cfg["anthropic"]["model"]
+
+        # Get LLM provider configuration
+        llm_config = cfg.get("llm", {})
+        provider_name = llm_config.get("provider", "anthropic")
+        use_langchain = llm_config.get("use_langchain", True)
+        models = llm_config.get("models", {})
+        model = models.get(provider_name, "claude-sonnet-4-5-20250929")
+
+        # For backward compatibility, also support direct Anthropic client
+        if provider_name == "anthropic" and not use_langchain:
+            anthropic_client = Anthropic()
+        else:
+            # Use the new factory (but we need to adapt it for the inference engine)
+            # For now, create Anthropic client directly since TopicInferenceEngine expects it
+            anthropic_client = Anthropic()
 
         # Initialize knowledge base
         kb = KnowledgeBase(base_path=knowledge_base)
