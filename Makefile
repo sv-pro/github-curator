@@ -12,11 +12,26 @@ install:  ## Install package in development mode
 install-dev:  ## Install package with development dependencies
 	pip install -e ".[dev]"
 
-test:  ## Run tests with coverage
+test:  ## Run all tests with coverage
 	pytest
 
 test-verbose:  ## Run tests with verbose output
 	pytest -v
+
+test-unit:  ## Run unit tests only
+	pytest tests/unit/ -v
+
+test-integration:  ## Run integration tests only
+	pytest tests/integration/ -v
+
+test-coverage:  ## Run tests with detailed coverage report
+	pytest --cov=curator --cov-report=html --cov-report=term-missing
+
+test-phase-gate:  ## Run phase gate tests (use PHASE=N for specific phase)
+	python scripts/run_phase_gate_tests.py $(if $(PHASE),--phase $(PHASE),)
+
+test-phase-gate-strict:  ## Run phase gate tests in strict mode
+	python scripts/run_phase_gate_tests.py --strict --coverage-min 80
 
 lint:  ## Run code linters
 	ruff check curator/ tests/

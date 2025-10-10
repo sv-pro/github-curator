@@ -59,3 +59,45 @@ Main configuration in `config/curator.yaml`:
 This project is in specification phase - the `instructions.md` file contains the complete implementation specification. The architecture demonstrates IntentHub principles through structured evaluation, metacognitive assessment, and reflective learning.
 
 No build or test commands are available yet as implementation has not begun. The project structure and modules described above represent the planned architecture from the specification.
+
+## Session Management
+
+### Context Preservation
+
+To maintain continuity across sessions, use `.claude/context.md` to track recent work:
+
+- **When to update context**:
+  - Before committing significant features
+  - After completing a phase or major milestone
+  - When switching branches or starting new work
+  - At natural breakpoints (end of day, before reviews)
+
+- **What to include**:
+  - Recent changes and commits since last update
+  - Current branch and uncommitted changes
+  - What was implemented/fixed (key files and decisions)
+  - Current task context and goals
+  - Next steps and pending tasks
+  - Any blockers or important notes
+
+- **How to update**:
+  - Use the `/save-context` slash command for automated updates
+  - Git hook will remind you before commits if context is stale
+  - Manually request: "Update .claude/context.md with current session"
+
+### Best Practices
+
+- Keep context focused on recent work (last 1-2 sessions)
+- Include file paths and line numbers for key changes
+- Document technical decisions and their rationale
+- Note any workarounds or temporary solutions
+- Link to related issues, PRs, or documentation
+
+### Testing and Quality
+
+- Run `make test-phase-gate` before committing to feature branches
+- Run `make test-phase-gate-strict` before creating pull requests
+- Ensure coverage doesn't drop below 70%
+- All tests must pass before merging
+
+See [TESTING.md](docs/TESTING.md) for comprehensive testing guide.
