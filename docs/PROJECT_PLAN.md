@@ -67,8 +67,8 @@ Build an intelligent GitHub repository curator that demonstrates IntentHub princ
 
 ### Option B: Full Hybrid System (Ambitious) ⭐ Recommended
 
-**Timeline**: 4-6 weeks
-**Goal**: Modern, scalable, intelligent curation platform
+**Timeline**: 5-7 weeks
+**Goal**: Modern, scalable, intelligent curation platform with smart fetching
 
 #### Phase 1: Foundation (Week 1) ✅ **COMPLETE**
 **Focus**: Restore features + improve architecture
@@ -81,7 +81,28 @@ Build an intelligent GitHub repository curator that demonstrates IntentHub princ
 
 **Deliverables**: ✅ All original features restored with better error handling
 
-#### Phase 2: Cost Tracking + Semantic Search (Week 2)
+#### Phase 2: Smart Repo Fetcher (Week 2) 🚀 **HIGHEST PRIORITY**
+**Focus**: Adaptive multi-stage analysis for 50-70% cost reduction and 3-5x speedup
+
+**Implementation**:
+- [ ] Implement `SmartRepoFetcher` class with multi-stage pipeline
+- [ ] Stage 1: Metadata-based filtering (stars, topics, size)
+- [ ] Stage 2: Lightweight analysis (README excerpt + quick LLM check)
+- [ ] Stage 3: Deep analysis (full evaluation - current approach)
+- [ ] Stage 4: Code analysis (optional, for thorough mode)
+- [ ] Add CLI options: `--fetch-mode` (fast/standard/thorough/exhaustive)
+- [ ] Track and display savings (API calls, costs, time)
+- [ ] Configuration for thresholds and toggles
+
+**Deliverables**:
+- Smart fetching enabled by default with configurable modes
+- Cost and time savings displayed after curation
+- Documentation: user guide and fetch modes reference
+- **Expected Impact**: 50-70% API call reduction, 60-80% cost savings, 3-5x faster
+
+**See**: [Smart Repo Fetcher Feature Spec](features/smart-repo-fetcher.md)
+
+#### Phase 3: Cost Tracking + Semantic Search (Week 3)
 **Focus**: Add cost awareness and vector database for intelligent search
 
 **Cost Tracking**:
@@ -100,7 +121,7 @@ Build an intelligent GitHub repository curator that demonstrates IntentHub princ
 - Cost display after each command (curate/mark/collect)
 - Semantic search like "find repos similar to FastAPI"
 
-#### Phase 3: Graph Relationships (Week 3)
+#### Phase 4: Graph Relationships (Week 4)
 **Focus**: Add graph database for pattern discovery
 
 - [ ] Integrate NetworkX for relationship tracking
@@ -110,7 +131,7 @@ Build an intelligent GitHub repository curator that demonstrates IntentHub princ
 
 **Deliverables**: Automatic pattern discovery and topic clustering
 
-#### Phase 4: Unified Knowledge Store (Week 4)
+#### Phase 5: Unified Knowledge Store (Week 5)
 **Focus**: Combine all storage layers with clean API
 
 - [ ] Create `KnowledgeStore` unified API
@@ -120,7 +141,7 @@ Build an intelligent GitHub repository curator that demonstrates IntentHub princ
 
 **Deliverables**: Single API for all knowledge operations
 
-#### Phase 5: Advanced Features (Week 5-6)
+#### Phase 6: Advanced Features (Week 6-7)
 **Focus**: RAG, advanced queries, optimization
 
 - [ ] Implement RAG for README analysis
@@ -153,11 +174,12 @@ Build an intelligent GitHub repository curator that demonstrates IntentHub princ
 | Declarative Pipeline | 🚧 Phase 1 Done | P0 | → [Pipeline Plan](features/declarative-pipeline.md) |
 | Multi-Provider LLM | ✅ Implemented | P0 | Anthropic/OpenAI/Google/Ollama → [LLM Providers](LLM_PROVIDERS.md) |
 | Error Detection | ✅ Implemented | P0 | Structured error hierarchy with solutions |
-| Cost Tracking | 📋 Planned | P1 | Show API costs per command → [Cost Tracking](features/cost-tracking.md) |
-| Hybrid Storage | 📋 Designed | P1 | → [Storage Plan](features/hybrid-storage.md) |
-| Vector Search | 📋 Planned | P1 | Part of hybrid storage |
-| Graph DB | 📋 Planned | P2 | Part of hybrid storage |
-| RAG Analysis | 📋 Planned | P3 | Future enhancement |
+| **Smart Repo Fetcher** | 📋 **Phase 2 - HIGHEST** | **P0** | **50-70% cost savings, 3-5x speedup** → [Smart Fetcher](features/smart-repo-fetcher.md) |
+| Cost Tracking | 📋 Phase 3 | P1 | Show API costs per command → [Cost Tracking](features/cost-tracking.md) |
+| Hybrid Storage | 📋 Phase 3-5 | P1 | → [Storage Plan](features/hybrid-storage.md) |
+| Vector Search | 📋 Phase 3 | P1 | Part of hybrid storage |
+| Graph DB | 📋 Phase 4 | P2 | Part of hybrid storage |
+| RAG Analysis | 📋 Phase 6 | P3 | Future enhancement |
 
 ### Quality & DevOps
 
@@ -285,6 +307,6 @@ curator --help
 
 ---
 
-**Last Updated**: October 6, 2025
-**Status**: Phase 1 Complete, Planning Phase 2
-**Next Milestone**: Restore missing commands (Option A) or Begin hybrid storage (Option B)
+**Last Updated**: October 10, 2025
+**Status**: Phase 1 Complete, Phase 2 (Smart Repo Fetcher) is Highest Priority
+**Next Milestone**: Implement Smart Repo Fetcher for 50-70% cost savings and 3-5x speedup

@@ -1,7 +1,7 @@
 # GitHub Curator - TODO
 
-**Last Updated**: 2025-10-09
-**Current Phase**: Phase 1 Complete, Planning Phase 2
+**Last Updated**: 2025-10-10
+**Current Phase**: Phase 1 Complete, Phase 2 (Smart Repo Fetcher) is HIGHEST PRIORITY
 
 This document tracks the gap between the desired state (as defined in PROJECT_PLAN.md and feature specs) and the current implementation.
 
@@ -27,11 +27,12 @@ This document tracks the gap between the desired state (as defined in PROJECT_PL
 
 ---
 
-## 🚧 Phase 2: Smart Repo Fetcher (Current Priority)
+## 🚧 Phase 2: Smart Repo Fetcher 🚀 **HIGHEST PRIORITY**
 
-**Status**: Not started
-**Timeline**: ~1 week
-**Priority**: P1 (High Priority)
+**Status**: Not started (documented and ready for implementation)
+**Timeline**: ~1 week (5-7 days)
+**Priority**: P0 (Critical - HIGHEST PRIORITY)
+**Expected Impact**: 50-70% API call reduction, 60-80% cost savings, 3-5x speedup
 
 **Concept**: Avoid brute-force repo analysis through gradual, adaptive fetching:
 
@@ -56,14 +57,40 @@ This document tracks the gap between the desired state (as defined in PROJECT_PL
 
 ### Implementation Tasks
 
-- [ ] Design multi-stage analysis algorithm
-- [ ] Define relevance thresholds for each stage
-- [ ] Create `curator/github/smart_fetcher.py`
-- [ ] Add confidence-based decision tree
-- [ ] Track savings (API calls, time, LLM costs)
-- [ ] Add `--smart-fetch` flag to curate command (make default?)
-- [ ] Document algorithm and thresholds
-- [ ] Create `docs/features/smart-repo-fetcher.md`
+**Core Implementation**:
+- [ ] Create `curator/github/smart_fetcher.py` with `SmartRepoFetcher` class
+- [ ] Implement Stage 1: Metadata-based filtering (stars, topics, size, language)
+- [ ] Implement Stage 2: Lightweight analysis (README excerpt + quick LLM check)
+- [ ] Implement Stage 3: Deep analysis (full evaluation - current approach)
+- [ ] Implement Stage 4: Code analysis (optional, for thorough mode)
+- [ ] Add decision logic with confidence thresholds
+- [ ] Create `AnalysisTrace` class for tracking analysis path
+- [ ] Implement savings calculator (API calls, costs, time)
+
+**Configuration**:
+- [ ] Add `smart_fetch` section to `config/curator.yaml`
+- [ ] Define thresholds (min_quick_score, high_promise_score, etc.)
+- [ ] Add thoroughness presets (fast/standard/thorough/exhaustive)
+- [ ] Support enable/disable toggles for each stage
+
+**CLI Integration**:
+- [ ] Add `--fetch-mode` option (fast/standard/thorough/exhaustive)
+- [ ] Add `--disable-smart-fetch` flag for brute-force mode
+- [ ] Display savings summary after curation
+- [ ] Show skip reasons in verbose mode
+
+**Documentation**:
+- [x] Feature specification: `docs/features/smart-repo-fetcher.md` ✅
+- [ ] User guide: `docs/user-guide/smart-fetching.md`
+- [ ] Fetch modes reference: `docs/user-guide/fetch-modes.md`
+- [ ] Update configuration docs with smart fetch settings
+- [ ] Add examples to README
+
+**Testing & Validation**:
+- [ ] Baseline comparison tests (brute force vs smart fetch)
+- [ ] False negative detection (verify skipped repos)
+- [ ] Threshold tuning experiments
+- [ ] Performance benchmarks
 
 **Benefits**:
 
@@ -315,46 +342,7 @@ docs/:
 
 ## ✨ New Features (From github-curator.todo)
 
-### Smart GitHub Repo Fetcher (Task 3)
-**Status**: Not designed
-**Priority**: P2 (Medium)
-
-**Concept**: Avoid brute-force repo analysis through gradual, adaptive fetching:
-
-1. **Lightweight Analysis Phase**:
-   - Fetch only README.md and root-level docs
-   - Check topics list (GitHub API metadata)
-   - Look for documentation in doc/, docs/ folders
-   - Make initial relevance decision
-
-2. **Decision Point**:
-   - If initial analysis shows high relevance → proceed to deep analysis
-   - If low relevance → skip (save API calls and time)
-   - If uncertain → fetch additional context (ARCHITECTURE.md, examples/)
-
-3. **Deep Analysis Phase** (only if needed):
-   - Clone repository (if --use-git-clone)
-   - Analyze full code structure
-   - Extract architectural patterns
-   - Perform comprehensive evaluation
-
-**Implementation Tasks**:
-- [ ] Design multi-stage analysis algorithm
-- [ ] Define relevance thresholds for each stage
-- [ ] Create `curator/github/smart_fetcher.py`
-- [ ] Add confidence-based decision tree
-- [ ] Track savings (API calls, time, LLM costs)
-- [ ] Add `--smart-fetch` flag to curate command (make default?)
-- [ ] Document algorithm and thresholds
-
-**Benefits**:
-- Faster curation (skip irrelevant repos early)
-- Lower API costs (fewer LLM calls)
-- Better GitHub rate limit usage
-- Configurable aggressiveness (conservative vs thorough)
-
-**Reference Document**:
-- [ ] Create `docs/features/smart-repo-fetcher.md`
+_Note: Smart GitHub Repo Fetcher has been moved to Phase 2 (see above) as the HIGHEST PRIORITY feature._
 
 ---
 
@@ -406,32 +394,40 @@ docs/:
 
 ## 🎯 Immediate Next Steps (Priority Order)
 
-1. **Phase 2 - Smart Repo Fetcher** (1 week)
-   - Design multi-stage analysis algorithm
-   - Implement adaptive fetching strategy
-   - Track cost and time savings
+1. **Phase 2 - Smart Repo Fetcher** 🚀 **HIGHEST PRIORITY** (1 week)
+   - Implement `SmartRepoFetcher` class with 4-stage pipeline
+   - Add CLI options: `--fetch-mode` (fast/standard/thorough/exhaustive)
+   - Create user documentation (smart-fetching.md, fetch-modes.md)
+   - Track and display savings (API calls, costs, time)
+   - **Expected Impact**: 50-70% cost reduction, 3-5x speedup
 
-2. **Fix mark command LLM provider** (1 day)
+2. **Documentation for Smart Repo Fetcher** (1 day)
+   - Create `docs/user-guide/smart-fetching.md`
+   - Create `docs/user-guide/fetch-modes.md`
+   - Update README with smart fetch examples
+   - Add configuration reference
+
+3. **Fix mark command LLM provider** (1 day)
    - Use LLMFactory instead of direct Anthropic client
    - Add provider configuration support
 
-3. **Phase 3 - Cost Tracking** (1 week)
+4. **Phase 3 - Cost Tracking** (1 week)
    - Implement cost calculator
    - Add token tracking to all LLM providers
    - Display costs after commands
 
-4. **Phase 4 - Semantic Search** (1 week)
+5. **Phase 4 - Semantic Search** (1 week)
    - Integrate ChromaDB
    - Add embedding generation
    - Implement semantic search command
 
-5. **Testing Foundation** (3 days)
+6. **Testing Foundation** (3 days)
    - Set up CI pipeline
    - Increase test coverage to >50%
    - Add integration tests
 
-6. **Documentation Cleanup** (2 days)
-   - Consolidate documentation (see Task 2 proposal)
+7. **Documentation Cleanup** (2 days)
+   - Consolidate documentation (see DOCS_REORGANIZATION_PROPOSAL.md)
    - Remove duplicates
    - Clear entry points for different audiences
 
