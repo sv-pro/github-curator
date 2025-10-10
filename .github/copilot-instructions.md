@@ -44,6 +44,18 @@ Please analyze the current session and update `.claude/context.md` with:
 5. **Next steps and pending tasks**
 6. **Any blockers or important notes**
 
+### When I say "load context" or "read context"
+
+Please read `.claude/context.md` and provide a brief overview including:
+
+1. **Recent commits and accomplishments**
+2. **Current branch and status** (clean/uncommitted changes)
+3. **Key technical details** (Smart Fetcher, tests, implementations)
+4. **Next steps and immediate options**
+5. **Any important notes or blockers**
+
+Keep the summary concise and actionable. Highlight what's ready to work on next.
+
 ### Context Update Triggers
 
 Update context at these times:
