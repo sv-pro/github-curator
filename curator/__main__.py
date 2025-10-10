@@ -18,6 +18,7 @@ from curator.core.validation import Validator  # noqa: E402
 from curator.github.adaptive_search import AdaptiveSearchStrategy, SearchConstraints  # noqa: E402
 from curator.github.api_client import GitHubAPIClient  # noqa: E402
 from curator.github.repo_analyzer import RepositoryAnalyzer  # noqa: E402
+from curator.github.smart_fetcher import SmartRepoFetcher  # noqa: E402
 from curator.outputs.report_generator import ReportGenerator  # noqa: E402
 
 
@@ -60,6 +61,17 @@ def cli():
     "--use-git-clone", is_flag=True, help="Clone repos locally instead of using GitHub API (faster)"
 )
 @click.option("--trace/--no-trace", default=True, help="Generate HTML trace viewer")
+@click.option(
+    "--fetch-mode",
+    type=click.Choice(["fast", "standard", "thorough", "exhaustive"], case_sensitive=False),
+    default="standard",
+    help="Analysis depth: fast (quick filter) | standard (balanced, default) | thorough (deep) | exhaustive (clone all)",
+)
+@click.option(
+    "--disable-smart-fetch",
+    is_flag=True,
+    help="Disable smart fetching, analyze all repos fully (brute force)",
+)
 def curate(
     theme: str,
     focus: tuple,
@@ -71,6 +83,8 @@ def curate(
     max_age_days: Optional[int],
     use_git_clone: bool,
     trace: bool,
+    fetch_mode: str,
+    disable_smart_fetch: bool,
 ):
     """Curate GitHub repositories based on a theme.
 
@@ -172,29 +186,57 @@ def curate(
 
     # Step 4: Analyze and evaluate
     click.echo("🧠 Evaluating repositories...")
+
+    # Initialize smart fetcher or use brute force
+    use_smart_fetch = not disable_smart_fetch
+    if use_smart_fetch:
+        click.echo(f"   Using smart fetching mode: {fetch_mode}")
+        smart_fetcher = SmartRepoFetcher(config, intent, github_client, analyzer, evaluator)
+    else:
+        click.echo("   Using brute force evaluation (smart fetch disabled)")
+        smart_fetcher = None
+
     click.echo("")
     evaluations = []
+    skipped_count = 0
 
     try:
         for idx, repo in enumerate(repos, 1):
             click.echo(f"[{idx}/{len(repos)}] {repo.full_name}")
 
-            # Gather context
-            click.echo("  → Fetching README...")
-            context = analyzer.analyze_repository(repo)
+            if use_smart_fetch and smart_fetcher:
+                # Use smart fetcher
+                evaluation = smart_fetcher.analyze(repo, thoroughness=fetch_mode)
 
-            click.echo("  → Generating context summary...")
-            context_summary = analyzer.get_evaluation_context_summary(context)
+                if evaluation is None:
+                    # Repository was skipped
+                    click.echo("  ⊘ Skipped (filtered by smart fetch)")
+                    skipped_count += 1
+                    click.echo("")
+                    continue
+                else:
+                    evaluations.append(evaluation)
+                    click.echo(
+                        f"  ✓ Score: {evaluation.overall_relevance:.2f}, Confidence: {evaluation.confidence:.2f}"
+                    )
+                    click.echo("")
+            else:
+                # Brute force: evaluate everything
+                click.echo("  → Fetching README...")
+                context = analyzer.analyze_repository(repo)
 
-            # Evaluate
-            click.echo("  → Evaluating with Claude...")
-            evaluation = evaluator.evaluate_repository(context, intent, context_summary)
-            evaluations.append(evaluation)
+                click.echo("  → Generating context summary...")
+                context_summary = analyzer.get_evaluation_context_summary(context)
 
-            click.echo(
-                f"  ✓ Score: {evaluation.overall_relevance:.2f}, Confidence: {evaluation.confidence:.2f}"
-            )
-            click.echo("")
+                # Evaluate
+                click.echo("  → Evaluating with Claude...")
+                evaluation = evaluator.evaluate_repository(context, intent, context_summary)
+                evaluations.append(evaluation)
+
+                click.echo(
+                    f"  ✓ Score: {evaluation.overall_relevance:.2f}, Confidence: {evaluation.confidence:.2f}"
+                )
+                click.echo("")
     except KeyboardInterrupt:
         click.echo("\n\n⚠️  Evaluation interrupted by user", err=True)
         if evaluations:
@@ -263,6 +305,20 @@ def curate(
         click.echo(f"   ✓ Trace viewer: {html_path}")
 
     click.echo("")
+
+    # Show smart fetch savings
+    if use_smart_fetch and smart_fetcher:
+        savings = smart_fetcher.get_savings_summary()
+        if savings["skipped_count"] > 0:
+            click.echo("💰 Smart Fetch Savings:")
+            click.echo(
+                f"   Repos analyzed: {savings['analyzed_count']} | "
+                f"Skipped: {savings['skipped_count']} ({savings['skip_rate']:.0%})"
+            )
+            if savings["cost_saved"] > 0:
+                click.echo(f"   Estimated cost saved: ${savings['cost_saved']:.2f}")
+            click.echo("")
+
     click.echo("✨ Curation complete!")
 
     # Show top results
