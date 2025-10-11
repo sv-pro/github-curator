@@ -1,61 +1,37 @@
 # Claude Code Context
 
-Last updated: 2025-10-11 (end of session)
+Last updated: 2025-10-11 (current session)
 Branch: `feature/research-architecture`
 
 ## Session Summary
 
 ### What Was Accomplished This Session
 
-**Milestone 1**: Repository Tracking System ✅ COMPLETE
+**Milestone 6**: Phase 3 - Refresh & Comparison ✅ COMPLETE
 
-- Built complete git-based tracking (~1,100 lines)
-- Commands: `track`, `list-tracked`, `curate-tracked`, `review`
-- Git-native storage with LLM-generated reviews
-- Tested successfully with real repository
-- Commit: 9cf6253
-
-**Milestone 2**: Research Architecture Redesign ✅ COMPLETE
-
-- Analyzed command confusion, designed new architecture
-- Created comprehensive design document (40+ page plan)
-- Designed around time-series research workflow
-- 5-phase implementation plan
-- Commit: c1c06d2
-
-**Milestone 3**: Research Module Foundation ✅ COMPLETE
-
-- Implemented `ResearchManager` class (~340 lines)
-- Workspace CRUD operations (create, list, load, delete)
-- YAML-based config persistence
-- All tests passing (black, ruff, mypy)
-- Commit: 40243f4
-
-**Milestone 4**: Phase 1 - Research CLI Commands ✅ COMPLETE
-
-- Added full CLI integration for research workspaces (~340 lines)
-- Commands: `init`, `list`, `show`, `add`, `delete`
-- Tested end-to-end with workspace creation, management, deletion
+- Added refresh and diff commands (~417 lines)
+- `refresh` - Update workspace with latest data (sync/discover/all modes)
+- `diff` - Compare snapshots with detailed change analysis
+- Integration with RepoTracker, AdaptiveSearchStrategy, and snapshot system
 - All linters passing (black, ruff, mypy)
-- Commit: 72679e8
+- Commit: fe84891
 
-**Milestone 5**: Phase 2 - Evaluation & Snapshots ✅ COMPLETE
+**Previous Milestones**:
 
-- Added collection and snapshot commands (~350 lines)
-- `collect` - GitHub search with batch repo addition, duplicate detection
-- `snapshot` - Full evaluation pipeline with timestamped JSON snapshots
-- Integration with AdaptiveSearchStrategy and RepoTracker
-- Snapshot metadata tracking in workspace config
-- Commit: 858a32a
+1. Repository Tracking System ✅ (9cf6253)
+2. Research Architecture Redesign ✅ (c1c06d2)
+3. Research Module Foundation ✅ (40243f4)
+4. Phase 1 - Research CLI Commands ✅ (72679e8)
+5. Phase 2 - Evaluation & Snapshots ✅ (858a32a)
 
 ## Recent Commits
 
 ```bash
+fe84891 feat: Complete Phase 3 - Research refresh and snapshot comparison
+91a5f43 docs: Save comprehensive session context
 f442777 docs: Update context with Phase 2 completion
 858a32a feat: Complete Phase 2 - Research evaluation and snapshots
 a40eed4 docs: Update context with Phase 1 completion
-72679e8 feat: Complete Phase 1 - Research workspace CLI commands
-40243f4 feat: Add research workspace management (Phase 1 - partial)
 ```
 
 ## Current Status
@@ -64,20 +40,20 @@ a40eed4 docs: Update context with Phase 1 completion
 
 - **Branch**: `feature/research-architecture`
 - **Status**: ✅ Clean working directory (all committed)
-- **Latest commit**: Context update (f442777)
-- **Latest feature commit**: Phase 2 evaluation & snapshots (858a32a)
+- **Latest commit**: Phase 3 refresh & diff (fe84891)
 - **Phase 1 Progress**: ✅ 100% COMPLETE
 - **Phase 2 Progress**: ✅ 100% COMPLETE
-- **Total Lines Added**: ~1,030 lines (340 Phase 1 + 350 Phase 2 + 340 backend)
+- **Phase 3 Progress**: ✅ 100% COMPLETE
+- **Total Lines Added**: ~1,447 lines (340 Phase 1 + 350 Phase 2 + 417 Phase 3 + 340 backend)
 
 ### What's Working
 
-1. **Research Workspace System** ✅ Phases 1 & 2 COMPLETE
+1. **Research Workspace System** ✅ Phases 1-3 COMPLETE
    - **Backend**: [curator/research/manager.py](curator/research/manager.py) - ResearchManager class
    - **CLI**: [curator/\_\_main\_\_.py](curator/__main__.py) - `curator research` command group
-   - **Commands**: `init`, `list`, `show`, `add`, `delete`, `collect`, `snapshot`
+   - **Commands**: `init`, `list`, `show`, `add`, `delete`, `collect`, `snapshot`, `refresh`, `diff`
    - **Storage**: `~/.github-curator/research/<name>/` with YAML config + JSON snapshots
-   - **Status**: Core functionality complete, ready for Phase 3 (refresh & comparison)
+   - **Status**: Core time-series research workflow complete and functional
 
 2. **Repository Tracking** ([curator/tracking/](curator/tracking/))
    - Git-native storage in `~/.github-curator/tracked/`
@@ -192,21 +168,23 @@ a40eed4 docs: Update context with Phase 1 completion
 - ✅ All linters passing (black, ruff, mypy)
 - ✅ Code committed (858a32a)
 
-**Phase 3: Refresh & Comparison** (Days 5-6) - NEXT UP
+**Phase 3: Refresh & Comparison** ✅ 100% COMPLETE
 
-- ⏳ `curator research refresh` - Update workspace repos
-  - Sync all repos with upstream (git pull)
-  - Optionally discover new repos matching query
-  - Combined mode: sync + discover
-- ⏳ `curator research diff` - Compare snapshots
-  - Load two snapshots by name
+- ✅ `curator research refresh` - Update workspace repos
+  - `--sync` flag: Pull latest changes from all tracked repos
+  - `--discover` flag: Search for new repos matching query
+  - `--all` flag: Combined sync + discover operations
+  - Progress reporting for both sync and discovery
+  - Duplicate detection for newly discovered repos
+- ✅ `curator research diff` - Compare snapshots
+  - Load two snapshots by name from workspace config
   - Identify new/removed/changed repos
-  - Score deltas and trend analysis
-  - Summary statistics
-- ⏳ Snapshot comparison utilities (backend)
-  - Snapshot loader module
-  - Diff calculator with change detection
-  - Trend analysis helpers
+  - Calculate score deltas and confidence changes
+  - Display biggest improvements and declines (top 5)
+  - Show stable repositories (±0.01 threshold)
+  - Trend analysis with percentage breakdown
+- ✅ All linters passing (black, ruff, mypy)
+- ✅ Code committed (fe84891)
 
 ### User's Workflow (Design Goal)
 
@@ -363,17 +341,49 @@ See [docs/RESEARCH_ARCHITECTURE_REDESIGN.md](docs/RESEARCH_ARCHITECTURE_REDESIGN
 - Split theme focus/exclude strings properly before passing to structurer
 - Use type: ignore[index] for dictionary access in complex nested structures
 
+### Phase 3 Implementation Details
+
+**[curator/\_\_main\_\_.py](curator/__main__.py)** (+417 lines):
+
+- `curator research refresh` command (~207 lines):
+  - Three operation modes: `--sync`, `--discover`, `--all`
+  - Sync mode: Iterates repos, calls `tracker.update_from_upstream()`
+  - Discover mode: Searches GitHub, filters duplicates, adds new repos
+  - Progress reporting with updated/up-to-date/failed counters
+  - Integration with RepoTracker and AdaptiveSearchStrategy
+
+- `curator research diff` command (~210 lines):
+  - Loads two snapshots from workspace config by name
+  - Calculates new/removed/common repositories
+  - Score delta analysis for all common repos
+  - Display sections:
+    - Summary statistics (totals, changes)
+    - Average score comparison with deltas
+    - New repositories (top 10)
+    - Removed repositories (top 10)
+    - Biggest improvements (top 5, score increase > 0.01)
+    - Biggest declines (top 5, score decrease < -0.01)
+    - Stable repositories (score change ±0.01)
+    - Trend analysis (percentage breakdown)
+
+**Type Safety Notes**:
+
+- Added `type: ignore[attr-defined]` for SearchResult object attributes
+- Added `type: ignore[import-untyped]` for untyped module imports
+- All hooks passing (black, ruff, mypy)
+
 ### Key Files Modified
 
 - **Backend**: [curator/research/manager.py](curator/research/manager.py) (340 lines)
-- **CLI**: [curator/\_\_main\_\_.py](curator/__main__.py) (+690 lines total)
+- **CLI**: [curator/\_\_main\_\_.py](curator/__main__.py) (+1,107 lines total)
   - Phase 1: Lines 1167-1509 (init, list, show, add, delete commands)
   - Phase 2: Lines 1458-1804 (collect, snapshot commands)
+  - Phase 3: Lines 1811-2214 (refresh, diff commands)
 - **Design**: [docs/RESEARCH_ARCHITECTURE_REDESIGN.md](docs/RESEARCH_ARCHITECTURE_REDESIGN.md)
 
 ### Commands Completed
 
-All 7 core research commands implemented:
+All 9 core research commands implemented:
 
 1. ✅ `init` - Create workspace with query and parameters
 2. ✅ `list` - Show all workspaces with stats
@@ -382,50 +392,55 @@ All 7 core research commands implemented:
 5. ✅ `delete` - Remove workspace with confirmation
 6. ✅ `collect` - Search and batch-add repositories
 7. ✅ `snapshot` - Evaluate all repos and save JSON
+8. ✅ `refresh` - Update workspace (sync/discover/all)
+9. ✅ `diff` - Compare two snapshots with trend analysis
 
 ## Session Wrap-Up
 
 ### Completed This Session
 
-1. ✅ **Phase 1: Research CLI Commands** (72679e8)
-   - 5 commands for workspace lifecycle management
-   - ~340 lines of CLI code
-   - Integration with ResearchManager and RepoTracker
-   - Full end-to-end testing
-
-2. ✅ **Phase 2: Evaluation & Snapshots** (858a32a)
-   - 2 commands for repo collection and evaluation
-   - ~350 lines of CLI code
-   - Integration with AdaptiveSearchStrategy and evaluation pipeline
-   - Comprehensive JSON snapshot format with metadata
+1. ✅ **Phase 3: Refresh & Comparison** (fe84891)
+   - 2 commands for workspace updates and snapshot analysis
+   - ~417 lines of CLI code
+   - Integration with RepoTracker, AdaptiveSearchStrategy, and snapshot system
+   - Comprehensive diff analysis with trend reporting
    - All type errors resolved (mypy passing)
-
-3. ✅ **Documentation Updates** (a40eed4, f442777)
-   - Context updated throughout development
-   - Clear next steps for Phase 3
 
 ### Statistics
 
-- **Total commits**: 4 feature commits + 2 docs commits
-- **Total lines added**: ~1,030 lines
-- **Commands implemented**: 7 of 7 planned for Phases 1-2
+- **Total commits**: 1 feature commit
+- **Total lines added**: ~417 lines
+- **Commands implemented**: 2 of 2 planned for Phase 3 (refresh, diff)
 - **Linters**: All passing (black, ruff, mypy)
-- **Testing**: Manual end-to-end testing complete
+- **Pre-commit hooks**: All passing
+
+### Phase 3 Complete
+
+**Core Research Workflow**: Phases 1-3 are now 100% complete with 9 commands:
+
+1. **Setup**: `init`, `list`, `show`, `delete`
+2. **Collection**: `add`, `collect`
+3. **Evaluation**: `snapshot`
+4. **Updates**: `refresh` (sync/discover/all)
+5. **Analysis**: `diff` (snapshot comparison)
+
+The time-series research workflow is now fully functional.
 
 ### Next Session Priority
 
-**Phase 3: Refresh & Comparison** - Implement final two commands:
+**Phase 4: Report Generation** (Optional) - Generate publishable content:
 
-1. `curator research refresh` - Keep workspace up-to-date
-2. `curator research diff` - Compare snapshots over time
+1. `curator research report` - Generate markdown reports from snapshots
+2. Template system for customizable output formats
+3. Comparison reports showing evolution over time
 
-These will complete the core research workflow for time-series analysis.
+Or proceed with **Phase 5: Command Consolidation** to deprecate old commands.
 
 ### Key Insights from Session
 
-- Research workspaces enable **time-series repository analysis**
-- Separation of concerns: discover → collect → evaluate → compare → publish
-- Snapshot system enables tracking repository evolution over time
-- Integration with existing components (tracking, evaluation) works seamlessly
-- Type safety important but manageable with proper casts and annotations
-- Self-contained workspaces prevent state pollution between research topics
+- **Refresh command** enables continuous monitoring of research topics
+- **Diff command** provides rich trend analysis for repository evolution
+- Type ignore comments handle untyped external modules cleanly
+- Pre-commit hooks catch issues before commit (ruff auto-fix, mypy checks)
+- Comprehensive progress reporting improves UX during long operations
+- Reusing existing components (RepoTracker, AdaptiveSearchStrategy) reduces code duplication
