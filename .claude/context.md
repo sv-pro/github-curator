@@ -1,6 +1,6 @@
 # Claude Code Context
 
-Last updated: 2025-10-11
+Last updated: 2025-10-11 (end of session)
 Branch: `feature/research-architecture`
 
 ## Session Summary
@@ -51,11 +51,11 @@ Branch: `feature/research-architecture`
 ## Recent Commits
 
 ```bash
+f442777 docs: Update context with Phase 2 completion
 858a32a feat: Complete Phase 2 - Research evaluation and snapshots
 a40eed4 docs: Update context with Phase 1 completion
 72679e8 feat: Complete Phase 1 - Research workspace CLI commands
 40243f4 feat: Add research workspace management (Phase 1 - partial)
-c1c06d2 docs: Add research architecture redesign plan
 ```
 
 ## Current Status
@@ -64,9 +64,11 @@ c1c06d2 docs: Add research architecture redesign plan
 
 - **Branch**: `feature/research-architecture`
 - **Status**: ✅ Clean working directory (all committed)
-- **Latest commit**: Phase 2 evaluation & snapshots (858a32a)
+- **Latest commit**: Context update (f442777)
+- **Latest feature commit**: Phase 2 evaluation & snapshots (858a32a)
 - **Phase 1 Progress**: ✅ 100% COMPLETE
 - **Phase 2 Progress**: ✅ 100% COMPLETE
+- **Total Lines Added**: ~1,030 lines (340 Phase 1 + 350 Phase 2 + 340 backend)
 
 ### What's Working
 
@@ -312,62 +314,118 @@ See [docs/RESEARCH_ARCHITECTURE_REDESIGN.md](docs/RESEARCH_ARCHITECTURE_REDESIGN
 
 ### What to Do Next
 
-1. **Continue Phase 1**: Add CLI commands
-   - Integrate `ResearchManager` into `curator/__main__.py`
-   - Implement `research` command group with subcommands
-   - Test workspace creation and management
+#### Start Phase 3: Refresh & Comparison
 
-2. **When Phase 1 is complete**:
-   - Commit with: "feat: Add research workspace management (Phase 1)"
-   - Test suite for ResearchManager
-   - Move to Phase 2: Evaluation & Snapshots
+1. **Implement `curator research refresh`**:
+   - Accept workspace name
+   - `--sync` flag: Pull latest changes for all repos (use RepoTracker.update_from_upstream)
+   - `--discover` flag: Search for new repos matching query (reuse collect logic)
+   - `--all` flag: Combined sync + discover
+   - Progress reporting and summary
 
-### Design Decisions Made
+2. **Implement `curator research diff`**:
+   - Accept workspace name and two snapshot names (--from, --to)
+   - Load both snapshot JSON files from `snapshots/` directory
+   - Calculate differences: new repos, removed repos, changed scores
+   - Display score deltas and trends
+   - Summary statistics (avg score change, confidence trends)
 
-- Research names are sanitized for filesystem safety
+3. **Optional Enhancement**:
+   - Create `curator/research/snapshot_compare.py` module
+   - Reusable snapshot loading and comparison logic
+   - Could be used by both CLI and future features
+
+### Design Decisions Made This Session
+
+**Phase 1 Decisions**:
+
+- Research names sanitized for filesystem safety (lowercase, hyphens, alphanumeric)
 - YAML config for human-readability and git-friendliness
 - Workspace structure: config.yaml + repos/ + snapshots/ + reports/
-- Reuse existing tracking/evaluation components
-- Self-contained workspaces (no shared state between research topics)
+- CLI parameter overrides for flexibility
+- Self-contained workspaces (no shared state between topics)
 
-### Key Files
+**Phase 2 Decisions**:
 
-- Design: [docs/RESEARCH_ARCHITECTURE_REDESIGN.md](docs/RESEARCH_ARCHITECTURE_REDESIGN.md)
-- Implementation: [curator/research/manager.py](curator/research/manager.py)
-- CLI integration: [curator/\_\_main\_\_.py](curator/__main__.py) (next up)
+- SearchConstraints requires int types (not Optional[int])
+  - Default: min_stars=0, max_age_months=24
+- Snapshot filenames: `<name>-<timestamp>.json` format
+- EvaluationReport attributes: `recommendation` and `notes` (not `justification`)
+- Snapshot JSON structure:
+  - Top level: name, timestamp, workspace, theme, intent, evaluations, statistics
+  - Per-evaluation: repo, scores, dimension_scores, recommendation, notes
+  - Statistics: total_repos, failed, avg_score, avg_confidence
+- Config.yaml updated with snapshot metadata for quick lookups
+
+**Type Safety Notes**:
+
+- Use `int()` casts for SearchConstraints parameters
+- Split theme focus/exclude strings properly before passing to structurer
+- Use type: ignore[index] for dictionary access in complex nested structures
+
+### Key Files Modified
+
+- **Backend**: [curator/research/manager.py](curator/research/manager.py) (340 lines)
+- **CLI**: [curator/\_\_main\_\_.py](curator/__main__.py) (+690 lines total)
+  - Phase 1: Lines 1167-1509 (init, list, show, add, delete commands)
+  - Phase 2: Lines 1458-1804 (collect, snapshot commands)
+- **Design**: [docs/RESEARCH_ARCHITECTURE_REDESIGN.md](docs/RESEARCH_ARCHITECTURE_REDESIGN.md)
+
+### Commands Completed
+
+All 7 core research commands implemented:
+
+1. ✅ `init` - Create workspace with query and parameters
+2. ✅ `list` - Show all workspaces with stats
+3. ✅ `show` - Display detailed workspace info
+4. ✅ `add` - Add single repository
+5. ✅ `delete` - Remove workspace with confirmation
+6. ✅ `collect` - Search and batch-add repositories
+7. ✅ `snapshot` - Evaluate all repos and save JSON
 
 ## Session Wrap-Up
 
-### Completed Today
+### Completed This Session
 
-1. ✅ **Tracking System** - Fully implemented and tested (9cf6253)
-   - Git-native storage, LLM-generated reviews
-   - Commands: `track`, `list-tracked`, `curate-tracked`, `review`
+1. ✅ **Phase 1: Research CLI Commands** (72679e8)
+   - 5 commands for workspace lifecycle management
+   - ~340 lines of CLI code
+   - Integration with ResearchManager and RepoTracker
+   - Full end-to-end testing
 
-2. ✅ **Architecture Redesign** - Complete design document (c1c06d2)
-   - 40+ page plan with 5 implementation phases
-   - Addresses command confusion with clear workflows
+2. ✅ **Phase 2: Evaluation & Snapshots** (858a32a)
+   - 2 commands for repo collection and evaluation
+   - ~350 lines of CLI code
+   - Integration with AdaptiveSearchStrategy and evaluation pipeline
+   - Comprehensive JSON snapshot format with metadata
+   - All type errors resolved (mypy passing)
 
-3. ✅ **Research Module** - Core workspace management (40243f4)
-   - ResearchManager with full CRUD operations
-   - YAML config, self-contained workspaces
-   - All linters passing
+3. ✅ **Documentation Updates** (a40eed4, f442777)
+   - Context updated throughout development
+   - Clear next steps for Phase 3
+
+### Statistics
+
+- **Total commits**: 4 feature commits + 2 docs commits
+- **Total lines added**: ~1,030 lines
+- **Commands implemented**: 7 of 7 planned for Phases 1-2
+- **Linters**: All passing (black, ruff, mypy)
+- **Testing**: Manual end-to-end testing complete
 
 ### Next Session Priority
 
-**CLI Integration** - Add research commands to `__main__.py`:
+**Phase 3: Refresh & Comparison** - Implement final two commands:
 
-1. `curator research init <name> --query "<theme>"`
-2. `curator research list`
-3. `curator research show <name>`
-4. `curator research add <name> <repo-url>`
+1. `curator research refresh` - Keep workspace up-to-date
+2. `curator research diff` - Compare snapshots over time
 
-Then test end-to-end and complete Phase 1.
+These will complete the core research workflow for time-series analysis.
 
 ### Key Insights from Session
 
-- User workflow is **time-series research** (topic evolution over time)
-- Need separation: explore → collect → snapshot → compare → publish
-- Research workspaces are self-contained (no shared state)
-- Snapshot comparison = core value (track evolution)
-- Reuse existing tracking/evaluation infrastructure
+- Research workspaces enable **time-series repository analysis**
+- Separation of concerns: discover → collect → evaluate → compare → publish
+- Snapshot system enables tracking repository evolution over time
+- Integration with existing components (tracking, evaluation) works seamlessly
+- Type safety important but manageable with proper casts and annotations
+- Self-contained workspaces prevent state pollution between research topics
