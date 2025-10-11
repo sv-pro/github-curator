@@ -39,14 +39,23 @@ Branch: `feature/research-architecture`
 - All linters passing (black, ruff, mypy)
 - Commit: 72679e8
 
+**Milestone 5**: Phase 2 - Evaluation & Snapshots ✅ COMPLETE
+
+- Added collection and snapshot commands (~350 lines)
+- `collect` - GitHub search with batch repo addition, duplicate detection
+- `snapshot` - Full evaluation pipeline with timestamped JSON snapshots
+- Integration with AdaptiveSearchStrategy and RepoTracker
+- Snapshot metadata tracking in workspace config
+- Commit: 858a32a
+
 ## Recent Commits
 
 ```bash
+858a32a feat: Complete Phase 2 - Research evaluation and snapshots
+a40eed4 docs: Update context with Phase 1 completion
 72679e8 feat: Complete Phase 1 - Research workspace CLI commands
 40243f4 feat: Add research workspace management (Phase 1 - partial)
-fa843e8 docs: Update context with research module progress
 c1c06d2 docs: Add research architecture redesign plan
-9cf6253 feat: Add repository tracking system with git-native storage
 ```
 
 ## Current Status
@@ -55,17 +64,18 @@ c1c06d2 docs: Add research architecture redesign plan
 
 - **Branch**: `feature/research-architecture`
 - **Status**: ✅ Clean working directory (all committed)
-- **Latest commit**: Phase 1 CLI commands (72679e8)
+- **Latest commit**: Phase 2 evaluation & snapshots (858a32a)
 - **Phase 1 Progress**: ✅ 100% COMPLETE
+- **Phase 2 Progress**: ✅ 100% COMPLETE
 
 ### What's Working
 
-1. **Research Workspace System** ✅ NEW
+1. **Research Workspace System** ✅ Phases 1 & 2 COMPLETE
    - **Backend**: [curator/research/manager.py](curator/research/manager.py) - ResearchManager class
    - **CLI**: [curator/\_\_main\_\_.py](curator/__main__.py) - `curator research` command group
-   - **Commands**: `init`, `list`, `show`, `add`, `delete`
-   - **Storage**: `~/.github-curator/research/<name>/` with YAML config
-   - **Status**: Phase 1 complete, ready for Phase 2 (evaluation & snapshots)
+   - **Commands**: `init`, `list`, `show`, `add`, `delete`, `collect`, `snapshot`
+   - **Storage**: `~/.github-curator/research/<name>/` with YAML config + JSON snapshots
+   - **Status**: Core functionality complete, ready for Phase 3 (refresh & comparison)
 
 2. **Repository Tracking** ([curator/tracking/](curator/tracking/))
    - Git-native storage in `~/.github-curator/tracked/`
@@ -167,20 +177,34 @@ c1c06d2 docs: Add research architecture redesign plan
 - ✅ End-to-end testing complete
 - ✅ Code committed (72679e8)
 
-**Phase 2: Evaluation & Snapshots** (Days 3-4) - NEXT UP
+**Phase 2: Evaluation & Snapshots** ✅ 100% COMPLETE
 
-- ⏳ `curator research collect` - Search and add repositories
+- ✅ `curator research collect` - Search and add repositories
   - Integration with AdaptiveSearchStrategy
   - Batch repo addition to workspace
-  - Progress reporting
-- ⏳ `curator research snapshot` - Create evaluation snapshots
+  - Duplicate detection and progress reporting
+- ✅ `curator research snapshot` - Create evaluation snapshots
   - Run full evaluation pipeline on workspace repos
   - Save results as timestamped JSON snapshots
   - Track snapshot metadata in config.yaml
-- ⏳ Snapshot comparison utilities
-  - Load and compare two snapshots
+- ✅ All linters passing (black, ruff, mypy)
+- ✅ Code committed (858a32a)
+
+**Phase 3: Refresh & Comparison** (Days 5-6) - NEXT UP
+
+- ⏳ `curator research refresh` - Update workspace repos
+  - Sync all repos with upstream (git pull)
+  - Optionally discover new repos matching query
+  - Combined mode: sync + discover
+- ⏳ `curator research diff` - Compare snapshots
+  - Load two snapshots by name
   - Identify new/removed/changed repos
   - Score deltas and trend analysis
+  - Summary statistics
+- ⏳ Snapshot comparison utilities (backend)
+  - Snapshot loader module
+  - Diff calculator with change detection
+  - Trend analysis helpers
 
 ### User's Workflow (Design Goal)
 
@@ -240,28 +264,28 @@ curator research report python-async-2025 --compare-from baseline --compare-to u
 
 See [docs/RESEARCH_ARCHITECTURE_REDESIGN.md](docs/RESEARCH_ARCHITECTURE_REDESIGN.md) for complete 5-phase plan.
 
-**Current Phase**: Phase 2 (Evaluation & Snapshots) - READY TO START
+**Current Phase**: Phase 3 (Refresh & Comparison) - READY TO START
 
 **Immediate Next Tasks**:
 
-1. **Implement `curator research collect`**:
-   - Accept workspace name and search query (or use config query)
-   - Use AdaptiveSearchStrategy to find repositories
-   - Batch add repos using RepoTracker
-   - Show progress and summary
+1. **Implement `curator research refresh`**:
+   - `--sync` flag: Pull latest changes for all repos
+   - `--discover` flag: Search for new repos matching query
+   - `--all` flag: Combined sync + discover
+   - Progress reporting and summary
 
-2. **Implement `curator research snapshot`**:
-   - Accept workspace name and snapshot name
-   - Load workspace config and repos
-   - Run evaluation pipeline on each repo
-   - Save results to `snapshots/<name>-<timestamp>.json`
-   - Update config.yaml with snapshot metadata
+2. **Implement `curator research diff`**:
+   - Accept workspace name and two snapshot names
+   - Load and parse both snapshot JSON files
+   - Calculate differences: new, removed, changed repos
+   - Show score deltas and trend analysis
+   - Summary statistics
 
-3. **Test Phase 2 commands**:
-   - Create test workspace
-   - Collect repos
-   - Create baseline snapshot
-   - Verify JSON output and metadata
+3. **Optional: Snapshot comparison backend**:
+   - Create `curator/research/snapshot_compare.py`
+   - Snapshot loader helper
+   - Diff calculator with change detection
+   - Reusable for both CLI and future features
 
 ## Key Technical Context
 
