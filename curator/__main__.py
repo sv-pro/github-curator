@@ -1808,6 +1808,423 @@ def research_snapshot(name: str, snapshot_name: str, config: str, use_git_clone:
         raise click.Abort() from None
 
 
+@research.command("refresh")
+@click.argument("name")
+@click.option("--sync", is_flag=True, help="Pull latest changes from upstream repositories")
+@click.option("--discover", is_flag=True, help="Search for new repositories matching query")
+@click.option("--all", "refresh_all", is_flag=True, help="Both sync and discover")
+@click.option("--limit", "-l", default=20, help="Max new repos to discover (default: 20)")
+@click.option("--config", "-c", default="config/curator.yaml", help="Configuration file path")
+def research_refresh(
+    name: str, sync: bool, discover: bool, refresh_all: bool, limit: int, config: str
+):
+    """Refresh research workspace with latest data.
+
+    NAME: Research workspace name
+
+    Options:
+    --sync: Pull latest changes from all tracked repositories
+    --discover: Search for new repositories matching research query
+    --all: Perform both sync and discover operations
+
+    At least one flag (--sync, --discover, or --all) must be specified.
+
+    Examples:
+
+        # Pull latest changes from all repositories
+        curator research refresh python-async --sync
+
+        # Find new repositories matching query
+        curator research refresh python-async --discover --limit 10
+
+        # Do both operations
+        curator research refresh python-async --all
+    """
+    try:
+        # Validate flags
+        if not (sync or discover or refresh_all):
+            click.echo(
+                "❌ Please specify at least one operation: --sync, --discover, or --all", err=True
+            )
+            raise click.Abort()
+
+        # Set operation flags
+        do_sync = sync or refresh_all
+        do_discover = discover or refresh_all
+
+        manager = ResearchManager()
+
+        if not manager.exists(name):
+            click.echo(f"❌ Research workspace '{name}' not found", err=True)
+            raise click.Abort()
+
+        ws_config = manager.load_config(name)
+        repos_path = manager.get_repos_path(name)
+
+        click.echo(f"🔄 Refreshing research workspace: {name}")
+        click.echo("")
+
+        # Phase 1: Sync existing repositories
+        if do_sync:
+            click.echo("📥 Syncing existing repositories...")
+            click.echo("")
+
+            # Get list of existing repos
+            existing_repos = []
+            if repos_path.exists():
+                for org_dir in repos_path.iterdir():
+                    if org_dir.is_dir():
+                        for repo_dir in org_dir.iterdir():
+                            if repo_dir.is_dir():
+                                existing_repos.append((org_dir.name, repo_dir.name))
+
+            if not existing_repos:
+                click.echo("   No repositories to sync")
+                click.echo("")
+            else:
+                from curator.tracking import RepoTracker
+
+                tracker = RepoTracker(repos_path)
+                updated = 0
+                up_to_date = 0
+                failed = 0
+
+                for idx, (org, repo) in enumerate(existing_repos, 1):
+                    try:
+                        click.echo(f"[{idx}/{len(existing_repos)}] {org}/{repo}")
+                        had_updates = tracker.update_from_upstream(org, repo)
+                        if had_updates:
+                            updated += 1
+                            click.echo("  ✓ Updated")
+                        else:
+                            up_to_date += 1
+                            click.echo("  • Already up-to-date")
+                    except Exception as e:
+                        failed += 1
+                        click.echo(f"  ✗ Failed: {e}", err=True)
+
+                click.echo("")
+                click.echo("✅ Sync complete!")
+                click.echo(f"   Updated: {updated}")
+                click.echo(f"   Already up-to-date: {up_to_date}")
+                if failed > 0:
+                    click.echo(f"   Failed: {failed}")
+                click.echo("")
+
+        # Phase 2: Discover new repositories
+        if do_discover:
+            click.echo("🔍 Discovering new repositories...")
+            click.echo("")
+
+            # Initialize GitHub client and search
+            from curator.github.api_client import GitHubAPIClient
+            from curator.knowledge.criteria_graph import (
+                SearchConstraints,  # type: ignore[import-untyped]
+            )
+            from curator.strategies.adaptive_search import (
+                AdaptiveSearchStrategy,  # type: ignore[import-untyped]
+            )
+
+            github_client = GitHubAPIClient(config)
+            adaptive_search = AdaptiveSearchStrategy(config)
+
+            # Build search constraints from workspace config
+            min_stars_val = ws_config.search.get("min_stars", 0)
+            max_age_days_val = ws_config.search.get("max_age_days")
+            max_age_months = int(max_age_days_val / 30) if max_age_days_val else 24
+
+            constraints = SearchConstraints(
+                min_stars=int(min_stars_val),
+                max_age_months=int(max_age_months),
+                requires_license=False,
+            )
+
+            # Search for repositories
+            click.echo("🔎 Searching GitHub...")
+            repos = adaptive_search.adaptive_search(
+                theme=ws_config.query,
+                github_client=github_client,
+                initial_constraints=constraints,
+                limit=limit,
+            )
+
+            if not repos:
+                click.echo("⚠️  No new repositories found matching criteria")
+                click.echo("")
+            else:
+                click.echo(f"   Found {len(repos)} repositories")
+                click.echo("")
+
+                # Get existing repos to avoid duplicates
+                existing_repos_set = set()
+                if repos_path.exists():
+                    for org_dir in repos_path.iterdir():
+                        if org_dir.is_dir():
+                            for repo_dir in org_dir.iterdir():
+                                if repo_dir.is_dir():
+                                    existing_repos_set.add(f"{org_dir.name}/{repo_dir.name}")
+
+                # Filter out existing repos
+                new_repos = [r for r in repos if r.full_name not in existing_repos_set]
+                skipped = len(repos) - len(new_repos)
+
+                if skipped > 0:
+                    click.echo(f"ℹ️  Skipping {skipped} repositories already in workspace")
+                    click.echo("")
+
+                if not new_repos:
+                    click.echo("✅ All matching repositories already in workspace")
+                    click.echo("")
+                else:
+                    click.echo(f"📦 Adding {len(new_repos)} new repositories...")
+                    click.echo("")
+
+                    # Add repositories using RepoTracker
+                    from curator.tracking import RepoTracker
+
+                    tracker = RepoTracker(repos_path)
+                    added = 0
+                    failed = 0
+
+                    for idx, repo in enumerate(new_repos, 1):
+                        try:
+                            click.echo(f"[{idx}/{len(new_repos)}] {repo.full_name}")  # type: ignore[attr-defined]
+                            info = tracker.track(repo.url)  # type: ignore[attr-defined]
+                            added += 1
+                            click.echo(f"  ✓ Cloned to {info.local_path}")
+                        except Exception as e:
+                            failed += 1
+                            click.echo(f"  ✗ Failed: {e}", err=True)
+
+                    click.echo("")
+                    click.echo("✅ Discovery complete!")
+                    click.echo(f"   Added: {added}")
+                    if failed > 0:
+                        click.echo(f"   Failed: {failed}")
+                    click.echo(f"   Total in workspace: {len(existing_repos_set) + added}")
+                    click.echo("")
+
+        # Summary
+        click.echo("✨ Refresh complete!")
+        click.echo("")
+        click.echo("Next steps:")
+        click.echo(f"   curator research show {name}  # View updated workspace")
+        click.echo(f"   curator research snapshot {name} --name <name>  # Create new snapshot")
+
+    except Exception as e:
+        click.echo(f"\n❌ Error: {type(e).__name__}: {e}", err=True)
+        import traceback
+
+        traceback.print_exc()
+        raise click.Abort() from None
+
+
+@research.command("diff")
+@click.argument("name")
+@click.option("--from", "from_snapshot", required=True, help="Name of baseline snapshot")
+@click.option("--to", "to_snapshot", required=True, help="Name of comparison snapshot")
+def research_diff(name: str, from_snapshot: str, to_snapshot: str):
+    """Compare two evaluation snapshots.
+
+    NAME: Research workspace name
+
+    Compares two snapshots to identify changes in repository evaluations over time.
+    Shows new repositories, removed repositories, and score changes for existing ones.
+
+    Example:
+
+        curator research diff python-async --from baseline --to update
+    """
+    try:
+        import json
+
+        manager = ResearchManager()
+
+        if not manager.exists(name):
+            click.echo(f"❌ Research workspace '{name}' not found", err=True)
+            raise click.Abort()
+
+        ws_config = manager.load_config(name)
+        snapshots_path = manager.get_snapshots_path(name)
+
+        # Find snapshot files by name
+        from_file = None
+        to_file = None
+
+        for snapshot_meta in ws_config.snapshots:
+            if snapshot_meta["name"] == from_snapshot:
+                from_file = snapshots_path / snapshot_meta["filename"]
+            if snapshot_meta["name"] == to_snapshot:
+                to_file = snapshots_path / snapshot_meta["filename"]
+
+        if not from_file:
+            click.echo(f"❌ Snapshot '{from_snapshot}' not found", err=True)
+            raise click.Abort()
+
+        if not to_file:
+            click.echo(f"❌ Snapshot '{to_snapshot}' not found", err=True)
+            raise click.Abort()
+
+        # Load snapshot data
+        with open(from_file) as f:
+            from_data = json.load(f)
+
+        with open(to_file) as f:
+            to_data = json.load(f)
+
+        click.echo(f"📊 Comparing snapshots: {from_snapshot} → {to_snapshot}")
+        click.echo("")
+
+        # Build repo maps (repo -> evaluation)
+        from_repos = {eval["repo"]: eval for eval in from_data["evaluations"]}
+        to_repos = {eval["repo"]: eval for eval in to_data["evaluations"]}
+
+        # Identify changes
+        all_repos = set(from_repos.keys()) | set(to_repos.keys())
+        new_repos = [r for r in to_repos.keys() if r not in from_repos]
+        removed_repos = [r for r in from_repos.keys() if r not in to_repos]
+        common_repos = [r for r in all_repos if r in from_repos and r in to_repos]
+
+        # Calculate score changes for common repos
+        score_changes = []
+        for repo in common_repos:
+            from_eval = from_repos[repo]
+            to_eval = to_repos[repo]
+            score_delta = to_eval["overall_relevance"] - from_eval["overall_relevance"]
+            conf_delta = to_eval["confidence"] - from_eval["confidence"]
+            score_changes.append(
+                {
+                    "repo": repo,
+                    "from_score": from_eval["overall_relevance"],
+                    "to_score": to_eval["overall_relevance"],
+                    "score_delta": score_delta,
+                    "from_conf": from_eval["confidence"],
+                    "to_conf": to_eval["confidence"],
+                    "conf_delta": conf_delta,
+                }
+            )
+
+        # Display summary statistics
+        click.echo("📈 Summary Statistics:")
+        click.echo("")
+        click.echo(f"   Total repos (from): {len(from_repos)}")
+        click.echo(f"   Total repos (to):   {len(to_repos)}")
+        click.echo(f"   New repos:          {len(new_repos)}")
+        click.echo(f"   Removed repos:      {len(removed_repos)}")
+        click.echo(f"   Common repos:       {len(common_repos)}")
+        click.echo("")
+
+        # Score statistics
+        from_stats = from_data["statistics"]
+        to_stats = to_data["statistics"]
+        avg_score_delta = to_stats["avg_score"] - from_stats["avg_score"]  # type: ignore[operator]
+        avg_conf_delta = to_stats["avg_confidence"] - from_stats["avg_confidence"]  # type: ignore[operator]
+
+        click.echo("📊 Average Scores:")
+        click.echo(f"   From: {from_stats['avg_score']:.2f} (confidence: {from_stats['avg_confidence']:.2f})")  # type: ignore[index]
+        click.echo(f"   To:   {to_stats['avg_score']:.2f} (confidence: {to_stats['avg_confidence']:.2f})")  # type: ignore[index]
+        delta_sign = "+" if avg_score_delta >= 0 else ""
+        conf_delta_sign = "+" if avg_conf_delta >= 0 else ""
+        click.echo(
+            f"   Delta: {delta_sign}{avg_score_delta:.2f} (confidence: {conf_delta_sign}{avg_conf_delta:.2f})"
+        )
+        click.echo("")
+
+        # New repositories
+        if new_repos:
+            click.echo(f"✨ New Repositories ({len(new_repos)}):")
+            click.echo("")
+            for repo in sorted(new_repos)[:10]:  # Show top 10
+                eval = to_repos[repo]
+                click.echo(
+                    f"   • {repo} - Score: {eval['overall_relevance']:.2f}, Confidence: {eval['confidence']:.2f}"
+                )
+            if len(new_repos) > 10:
+                click.echo(f"   ... and {len(new_repos) - 10} more")
+            click.echo("")
+
+        # Removed repositories
+        if removed_repos:
+            click.echo(f"🗑️  Removed Repositories ({len(removed_repos)}):")
+            click.echo("")
+            for repo in sorted(removed_repos)[:10]:  # Show top 10
+                eval = from_repos[repo]
+                click.echo(
+                    f"   • {repo} - Score: {eval['overall_relevance']:.2f}, Confidence: {eval['confidence']:.2f}"
+                )
+            if len(removed_repos) > 10:
+                click.echo(f"   ... and {len(removed_repos) - 10} more")
+            click.echo("")
+
+        # Score changes - show biggest improvements and declines
+        if score_changes:
+            # Sort by score delta
+            score_changes.sort(key=lambda x: x["score_delta"], reverse=True)
+
+            # Biggest improvements
+            improvements = [c for c in score_changes if c["score_delta"] > 0.01]
+            if improvements:
+                click.echo(f"📈 Biggest Improvements ({len(improvements)}):")
+                click.echo("")
+                for change in improvements[:5]:  # Show top 5
+                    click.echo(
+                        f"   • {change['repo']}: {change['from_score']:.2f} → {change['to_score']:.2f} "
+                        f"(+{change['score_delta']:.2f})"
+                    )
+                if len(improvements) > 5:
+                    click.echo(f"   ... and {len(improvements) - 5} more")
+                click.echo("")
+
+            # Biggest declines
+            declines = [c for c in score_changes if c["score_delta"] < -0.01]
+            if declines:
+                declines_sorted = sorted(declines, key=lambda x: x["score_delta"])
+                click.echo(f"📉 Biggest Declines ({len(declines)}):")
+                click.echo("")
+                for change in declines_sorted[:5]:  # Show top 5
+                    click.echo(
+                        f"   • {change['repo']}: {change['from_score']:.2f} → {change['to_score']:.2f} "
+                        f"({change['score_delta']:.2f})"
+                    )
+                if len(declines) > 5:
+                    click.echo(f"   ... and {len(declines) - 5} more")
+                click.echo("")
+
+            # Stable repos (small changes)
+            stable = [c for c in score_changes if abs(c["score_delta"]) <= 0.01]
+            if stable:
+                click.echo(f"➡️  Stable Repositories ({len(stable)}):")
+                click.echo(f"   {len(stable)} repos with minimal score changes (±0.01)")
+                click.echo("")
+
+        # Trend analysis
+        if score_changes:
+            positive_changes = len([c for c in score_changes if c["score_delta"] > 0.01])
+            negative_changes = len([c for c in score_changes if c["score_delta"] < -0.01])
+            stable_count = len([c for c in score_changes if abs(c["score_delta"]) <= 0.01])
+
+            click.echo("🔍 Trend Analysis:")
+            click.echo(
+                f"   Improved:  {positive_changes} repos ({100 * positive_changes / len(score_changes):.1f}%)"
+            )
+            click.echo(
+                f"   Declined:  {negative_changes} repos ({100 * negative_changes / len(score_changes):.1f}%)"
+            )
+            click.echo(
+                f"   Stable:    {stable_count} repos ({100 * stable_count / len(score_changes):.1f}%)"
+            )
+            click.echo("")
+
+        click.echo("✅ Comparison complete!")
+
+    except Exception as e:
+        click.echo(f"\n❌ Error: {type(e).__name__}: {e}", err=True)
+        import traceback
+
+        traceback.print_exc()
+        raise click.Abort() from None
+
+
 @research.command("delete")
 @click.argument("name")
 @click.option("--confirm", is_flag=True, help="Skip confirmation prompt")
