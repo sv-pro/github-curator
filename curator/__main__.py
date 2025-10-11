@@ -1455,6 +1455,359 @@ def research_add(name: str, repo_url: str):
         raise click.Abort() from None
 
 
+@research.command("collect")
+@click.argument("name")
+@click.option("--limit", "-l", type=int, help="Maximum repositories to collect")
+@click.option("--min-stars", type=int, help="Override minimum stars from config")
+@click.option("--max-age-days", type=int, help="Override max age from config")
+@click.option("--language", help="Filter by programming language")
+@click.option("--config", "-c", default="config/curator.yaml", help="Configuration file path")
+def research_collect(
+    name: str,
+    limit: Optional[int],
+    min_stars: Optional[int],
+    max_age_days: Optional[int],
+    language: Optional[str],
+    config: str,
+):
+    """Collect repositories and add to research workspace.
+
+    NAME: Research workspace name
+
+    Searches GitHub using the workspace's configured query and parameters,
+    then adds matching repositories to the workspace for evaluation.
+
+    Examples:
+
+        # Use config query and defaults
+        curator research collect python-async-2025
+
+        # Override parameters
+        curator research collect python-async-2025 --limit 20 --min-stars 1000
+
+        # Filter by language
+        curator research collect web-frameworks --language python --limit 30
+    """
+    try:
+        manager = ResearchManager()
+
+        if not manager.exists(name):
+            click.echo(f"❌ Research workspace '{name}' not found", err=True)
+            raise click.Abort()
+
+        # Load workspace config
+        ws_config = manager.load_config(name)
+
+        click.echo(f"🔍 Collecting repositories for: {name}")
+        click.echo(f"   Query: {ws_config.query}")
+        click.echo("")
+
+        # Initialize GitHub client and search
+        github_client = GitHubAPIClient(config)
+        adaptive_search = AdaptiveSearchStrategy(config)
+
+        # Build search constraints (CLI overrides config)
+        min_stars_val = min_stars if min_stars is not None else ws_config.search.get("min_stars", 0)
+        max_age_days_val = (
+            max_age_days if max_age_days is not None else ws_config.search.get("max_age_days")
+        )
+        max_age_months = int(max_age_days_val / 30) if max_age_days_val else 24
+
+        # Note: language filtering is not currently supported by SearchConstraints
+        # but is preserved in config for future use
+        constraints = SearchConstraints(
+            min_stars=int(min_stars_val),
+            max_age_months=int(max_age_months),
+            requires_license=False,
+        )
+
+        # Search for repositories
+        click.echo("🔎 Searching GitHub...")
+        repos = adaptive_search.adaptive_search(
+            theme=ws_config.query,
+            github_client=github_client,
+            initial_constraints=constraints,
+            limit=limit,
+        )
+
+        if not repos:
+            click.echo("⚠️  No repositories found matching criteria", err=True)
+            return
+
+        click.echo(f"   Found {len(repos)} repositories")
+        click.echo("")
+
+        # Get existing repos to avoid duplicates
+        repos_path = manager.get_repos_path(name)
+        existing_repos = set()
+        if repos_path.exists():
+            for org_dir in repos_path.iterdir():
+                if org_dir.is_dir():
+                    for repo_dir in org_dir.iterdir():
+                        if repo_dir.is_dir():
+                            existing_repos.add(f"{org_dir.name}/{repo_dir.name}")
+
+        # Filter out existing repos
+        new_repos = [r for r in repos if r.full_name not in existing_repos]
+        skipped = len(repos) - len(new_repos)
+
+        if skipped > 0:
+            click.echo(f"ℹ️  Skipping {skipped} repositories already in workspace")
+            click.echo("")
+
+        if not new_repos:
+            click.echo("✅ All matching repositories already in workspace")
+            return
+
+        click.echo(f"📦 Adding {len(new_repos)} new repositories...")
+        click.echo("")
+
+        # Add repositories using RepoTracker
+        from curator.tracking import RepoTracker
+
+        tracker = RepoTracker(repos_path)
+        added = 0
+        failed = 0
+
+        for idx, repo in enumerate(new_repos, 1):
+            try:
+                click.echo(f"[{idx}/{len(new_repos)}] {repo.full_name}")
+                info = tracker.track(repo.url)
+                added += 1
+                click.echo(f"  ✓ Cloned to {info.local_path}")
+            except Exception as e:
+                failed += 1
+                click.echo(f"  ✗ Failed: {e}", err=True)
+
+        click.echo("")
+        click.echo("✨ Collection complete!")
+        click.echo(f"   Added: {added}")
+        if failed > 0:
+            click.echo(f"   Failed: {failed}")
+        click.echo(f"   Total in workspace: {len(existing_repos) + added}")
+        click.echo("")
+        click.echo("Next steps:")
+        click.echo(f"   curator research snapshot {name} --name baseline")
+
+    except Exception as e:
+        click.echo(f"❌ Error: {type(e).__name__}: {e}", err=True)
+        raise click.Abort() from None
+
+
+@research.command("snapshot")
+@click.argument("name")
+@click.option(
+    "--snapshot-name", "-n", required=True, help="Name for this snapshot (e.g., baseline)"
+)
+@click.option("--config", "-c", default="config/curator.yaml", help="Configuration file path")
+@click.option(
+    "--use-git-clone", is_flag=True, help="Clone repos locally instead of using GitHub API"
+)
+def research_snapshot(name: str, snapshot_name: str, config: str, use_git_clone: bool):
+    """Create an evaluation snapshot of research workspace.
+
+    NAME: Research workspace name
+
+    Evaluates all repositories in the workspace using the configured theme,
+    then saves results as a timestamped JSON snapshot. Snapshots enable
+    tracking how repositories evolve over time.
+
+    Examples:
+
+        # Create baseline snapshot
+        curator research snapshot python-async-2025 --snapshot-name baseline
+
+        # Create update snapshot
+        curator research snapshot python-async-2025 --snapshot-name update-2025-10
+    """
+    import json
+    from datetime import datetime
+
+    try:
+        manager = ResearchManager()
+
+        if not manager.exists(name):
+            click.echo(f"❌ Research workspace '{name}' not found", err=True)
+            raise click.Abort()
+
+        # Load workspace config
+        ws_config = manager.load_config(name)
+
+        click.echo(f"📸 Creating snapshot: {snapshot_name}")
+        click.echo(f"   Workspace: {name}")
+        click.echo(f"   Theme: {ws_config.query}")
+        click.echo("")
+
+        # Get list of repositories
+        repos_path = manager.get_repos_path(name)
+        if not repos_path.exists():
+            click.echo("❌ No repositories in workspace", err=True)
+            click.echo("   Run: curator research collect {name}")
+            raise click.Abort()
+
+        repo_list = []
+        for org_dir in repos_path.iterdir():
+            if org_dir.is_dir():
+                for repo_dir in org_dir.iterdir():
+                    if repo_dir.is_dir():
+                        repo_list.append(f"{org_dir.name}/{repo_dir.name}")
+
+        if not repo_list:
+            click.echo("❌ No repositories in workspace", err=True)
+            raise click.Abort()
+
+        click.echo(f"📊 Evaluating {len(repo_list)} repositories...")
+        click.echo("")
+
+        # Initialize evaluation components
+        structurer = IntentStructurer(config)
+        github_client = GitHubAPIClient(config)
+        analyzer = RepositoryAnalyzer(github_client, config, use_git_clone=use_git_clone)
+        evaluator = MetacognitiveEvaluator(config)
+
+        # Structure intent from workspace config
+        click.echo("📋 Structuring intent...")
+        focus_str = ws_config.theme.get("focus", "")
+        exclude_str = ws_config.theme.get("exclude", "")
+
+        focus_areas: Optional[list[str]] = focus_str.split(",") if focus_str else None
+        exclusions: Optional[list[str]] = exclude_str.split(",") if exclude_str else None
+
+        intent = structurer.structure_theme(
+            theme=ws_config.query,
+            focus_areas=focus_areas,
+            exclusions=exclusions,
+        )
+        click.echo(f"   Created {len(intent.dimensions)} evaluation dimensions")
+        click.echo("")
+
+        # Evaluate each repository
+        evaluations = []
+        failed = 0
+
+        for idx, repo_full_name in enumerate(repo_list, 1):
+            try:
+                click.echo(f"[{idx}/{len(repo_list)}] {repo_full_name}")
+
+                # Get repository info from GitHub
+                gh_repo = github_client.get_repository(repo_full_name)
+                from curator.github.api_client import SearchResult
+
+                search_result = SearchResult(
+                    name=gh_repo.name,
+                    owner=gh_repo.owner.login,
+                    full_name=gh_repo.full_name,
+                    description=gh_repo.description or "",
+                    url=gh_repo.html_url,
+                    stars=gh_repo.stargazers_count,
+                    last_updated=gh_repo.pushed_at,
+                    language=gh_repo.language or "Unknown",
+                    license_name=gh_repo.license.name if gh_repo.license else None,
+                    topics=list(gh_repo.get_topics()),
+                )
+
+                # Analyze and evaluate
+                context = analyzer.analyze_repository(search_result)
+                context_summary = analyzer.get_evaluation_context_summary(context)
+                evaluation = evaluator.evaluate_repository(context, intent, context_summary)
+
+                evaluations.append(evaluation)
+                click.echo(
+                    f"  ✓ Score: {evaluation.overall_relevance:.2f}, Confidence: {evaluation.confidence:.2f}"
+                )
+
+            except Exception as e:
+                failed += 1
+                click.echo(f"  ✗ Failed: {type(e).__name__}: {e}", err=True)
+
+        if not evaluations:
+            click.echo("\n❌ No evaluations completed", err=True)
+            raise click.Abort()
+
+        click.echo("")
+        click.echo(f"✅ Completed {len(evaluations)} evaluations")
+        if failed > 0:
+            click.echo(f"   Failed: {failed}")
+        click.echo("")
+
+        # Save snapshot
+        timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+        snapshot_filename = f"{snapshot_name}-{timestamp}.json"
+        snapshots_path = manager.get_snapshots_path(name)
+        snapshot_file = snapshots_path / snapshot_filename
+
+        snapshot_data = {
+            "name": snapshot_name,
+            "timestamp": datetime.utcnow().isoformat(),
+            "workspace": name,
+            "theme": ws_config.query,
+            "intent": intent.to_dict(),
+            "evaluations": [
+                {
+                    "repo": eval.repo,
+                    "overall_relevance": eval.overall_relevance,
+                    "confidence": eval.confidence,
+                    "dimension_scores": [
+                        {
+                            "dimension": ds.dimension,
+                            "score": ds.score,
+                            "confidence": ds.confidence,
+                            "reasoning": ds.reasoning,
+                            "found_indicators": [
+                                {"indicator": ind.indicator, "evidence": ind.evidence}
+                                for ind in ds.found_indicators
+                            ],
+                        }
+                        for ds in eval.dimension_scores
+                    ],
+                    "recommendation": eval.recommendation,
+                    "notes": eval.notes,
+                }
+                for eval in evaluations
+            ],
+            "statistics": {
+                "total_repos": len(evaluations),
+                "failed": failed,
+                "avg_score": sum(e.overall_relevance for e in evaluations) / len(evaluations),
+                "avg_confidence": sum(e.confidence for e in evaluations) / len(evaluations),
+            },
+        }
+
+        with open(snapshot_file, "w") as f:
+            json.dump(snapshot_data, f, indent=2)
+
+        click.echo("💾 Snapshot saved:")
+        click.echo(f"   File: {snapshot_file}")
+        click.echo(f"   Repos: {len(evaluations)}")
+        stats = snapshot_data["statistics"]
+        click.echo(f"   Avg score: {stats['avg_score']:.2f}")  # type: ignore[index]
+        click.echo(f"   Avg confidence: {stats['avg_confidence']:.2f}")  # type: ignore[index]
+        click.echo("")
+
+        # Update workspace config with snapshot metadata
+        ws_config.snapshots.append(
+            {
+                "name": snapshot_name,
+                "timestamp": datetime.utcnow().isoformat(),
+                "filename": snapshot_filename,
+                "repo_count": len(evaluations),
+            }
+        )
+        manager.save_config(name, ws_config)
+
+        click.echo("✨ Snapshot complete!")
+        click.echo("")
+        click.echo("Next steps:")
+        click.echo(f"   curator research show {name}  # View all snapshots")
+
+    except Exception as e:
+        click.echo(f"\n❌ Error: {type(e).__name__}: {e}", err=True)
+        import traceback
+
+        traceback.print_exc()
+        raise click.Abort() from None
+
+
 @research.command("delete")
 @click.argument("name")
 @click.option("--confirm", is_flag=True, help="Skip confirmation prompt")
