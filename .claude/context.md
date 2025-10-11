@@ -1,39 +1,52 @@
 # Claude Code Context
 
 Last updated: 2025-10-11
-Branch: `feature/smart-repo-fetcher`
+Branch: `feature/research-architecture`
 
 ## Session Summary
 
 ### What Was Accomplished This Session
 
-**Major Milestone 1**: Repository Tracking System - Committed ✅
+**Milestone 1**: Repository Tracking System - Committed ✅
 
 - Built complete git-based tracking (~1,100 lines)
-- Committed to feature branch (9cf6253)
-- Tested with real repository (anthropics/anthropic-sdk-python)
+- Commands: `track`, `list-tracked`, `curate-tracked`, `review`
+- Git-native storage with LLM-generated reviews
+- Tested successfully with real repository
 
-**Major Milestone 2**: Research Architecture Redesign - Planned 📋
+**Milestone 2**: Research Architecture Redesign - Planned & Started 🚧
 
-- Analyzed command structure confusion
-- Designed new architecture around time-series research workflow
-- Created comprehensive design document
+- Analyzed command confusion, designed new architecture
+- Created comprehensive design document (40+ page plan)
+- Started Phase 1 implementation: ResearchManager class
+- New feature branch created
+
+**Milestone 3**: Research Module Foundation - In Progress ⚙️
+
+- Implemented `ResearchManager` class (~340 lines)
+- Workspace CRUD operations (create, list, load, delete)
+- YAML-based config persistence
+- Ready for CLI command integration
 
 ## Recent Commits
 
 ```bash
+c1c06d2 docs: Add research architecture redesign plan
 9cf6253 feat: Add repository tracking system with git-native storage
 f302163 docs: Update copilot-instructions with load-context command
 a7cb2d0 feat: Add /load-context slash command for reading session context
+002e53d feat: Add comprehensive test suite and CI/CD infrastructure (Phase 2.5)
 ```
 
 ## Current Status
 
 ### Branch Status
 
-- **Branch**: `feature/smart-repo-fetcher`
-- **Status**: Clean working directory
-- **Latest commit**: Repository tracking system (9cf6253)
+- **Branch**: `feature/research-architecture` (NEW)
+- **Status**: Uncommitted changes
+- **Untracked files**: `curator/research/` (2 files, ~340 lines)
+- **Latest commit**: Research architecture redesign plan (c1c06d2)
+- **Parent branch**: `feature/smart-repo-fetcher`
 
 ### What's Working
 
@@ -54,18 +67,76 @@ a7cb2d0 feat: Add /load-context slash command for reading session context
    - 70%+ coverage
    - CI/CD pipeline
 
+## Changes This Session (Uncommitted)
+
+### New Module: Research Management (~340 lines)
+
+**[curator/research/manager.py](curator/research/manager.py)** (335 lines):
+
+- `ResearchManager` class - Workspace lifecycle management
+  - `create()` - Initialize new research workspace
+  - `exists()` - Check if research exists
+  - `load_config()` / `save_config()` - YAML persistence
+  - `list_research()` - List all research workspaces
+  - `delete()` - Remove research workspace
+  - Helper methods for paths (repos/, snapshots/, reports/)
+- `ResearchConfig` dataclass - Configuration structure
+  - Stores: name, query, created, theme, search params, snapshots
+  - YAML serialization/deserialization
+- `ResearchInfo` dataclass - Runtime information
+  - Computed: repo_count, snapshot_count, last_updated
+  - Used for listing and display
+
+**[curator/research/\_\_init\_\_.py](curator/research/__init__.py)** (5 lines):
+
+- Module exports: `ResearchManager`, `ResearchConfig`, `ResearchInfo`
+
+**Workspace Structure** (created by ResearchManager):
+
+```text
+~/.github-curator/research/<topic>/
+├── config.yaml              # Research configuration (YAML)
+├── repos/                   # Cloned repositories
+│   └── org/repo/           # Will contain .curator/ files
+├── snapshots/              # Point-in-time evaluations (JSON)
+└── reports/                # Generated content (Markdown)
+```
+
+**Key Design Decisions**:
+
+1. **Name sanitization**: Research names converted to filesystem-safe format
+   - Lowercase, hyphens for spaces, alphanumeric only
+   - Example: "Python Async 2025" → "python-async-2025"
+
+2. **YAML config**: Human-readable, git-friendly
+   - Stores theme (focus/exclude) and search parameters
+   - Tracks snapshot metadata for quick lookups
+
+3. **Lazy loading**: Repo/snapshot counts computed on demand
+   - Avoids expensive filesystem scans during list operations
+
+4. **Reusable paths**: Separate methods for repos/, snapshots/, reports/
+   - Makes it easy for other components to find workspace resources
+
 ## Next Steps: Research Architecture Redesign
 
-### Problem Identified
+### Implementation Progress
 
-Current commands are confusing:
+**Phase 1: Core Infrastructure** (Days 1-2) - IN PROGRESS
 
-- `curate` - One-off search + evaluation (not tracked)
-- `curate-tracked` - Evaluate tracked repo (append to history)
-- `review` - Update tracked repo (REVIEW.md only)
-- Unclear when to use which
+- ✅ Create `curator/research/` module
+- ✅ `ResearchManager` class with workspace CRUD
+- ✅ `ResearchConfig` with YAML persistence
+- ✅ Workspace directory structure
+- ⏳ CLI commands (next up):
+  - `curator research init` - Create workspace
+  - `curator research list` - Show all research
+  - `curator research show` - Display research details
+  - `curator research add` - Add repos to research
 
-### User's Actual Workflow
+**Next**: Integrate ResearchManager into CLI
+
+### User's Workflow (Design Goal)
 
 **Time-series research**: Track topic evolution over time
 
@@ -119,169 +190,89 @@ curator research report python-async-2025 --compare-from baseline --compare-to u
 - `collect` → Removed (merged into `research collect`)
 - `mark` → Deferred
 
-### Implementation Plan
+### Full Implementation Plan
 
-**Phase 1**: Core infrastructure (Days 1-2)
+See [docs/RESEARCH_ARCHITECTURE_REDESIGN.md](docs/RESEARCH_ARCHITECTURE_REDESIGN.md) for complete 5-phase plan.
 
-- [ ] Create `curator/research/` module
-- [ ] `research init`, `list`, `add`, `show`
-- [ ] Research workspace management
-- [ ] Config.yaml structure
+**Current Phase**: Phase 1 (Core Infrastructure) - 60% complete
 
-**Phase 2**: Evaluation & snapshots (Days 3-5)
+**Immediate Next Tasks**:
 
-- [ ] `research collect` - Search + evaluate + add
-- [ ] `research snapshot` - Point-in-time evaluation
-- [ ] `research refresh --sync` - Update all repos
-- [ ] Snapshot JSON format
+1. Add CLI commands to [curator/\_\_main\_\_.py](curator/__main__.py):
+   - `curator research init` - Create new research workspace
+   - `curator research list` - Show all research workspaces
+   - `curator research show <name>` - Display research details
+   - `curator research add <name> <repo-url>` - Add repos to research
+2. Test commands with real usage
+3. Commit Phase 1 implementation
+4. Move to Phase 2 (Evaluation & Snapshots)
 
-**Phase 3**: Discovery & comparison (Days 6-8)
+## Key Technical Context
 
-- [ ] `research refresh --discover` - Find new repos
-- [ ] `research diff` - Compare snapshots
-- [ ] Change detection algorithms
+### Components Available for Reuse
 
-**Phase 4**: Content generation (Days 9-11)
+1. **Repository Tracking** ([curator/tracking/](curator/tracking/)) - Committed
+   - `RepoTracker`: Git operations (clone, pull, branch management)
+   - `CurationFileManager`: CURATION.md formatting
+   - `ReviewGenerator`: LLM-generated reviews
+   - Will be used by research system for repo management
 
-- [ ] `research report` - LLM-powered reports
-- [ ] Initial + comparison report generation
-- [ ] Markdown output
+2. **Evaluation Pipeline** - Existing
+   - `IntentStructurer`: Theme → evaluation dimensions
+   - `MetacognitiveEvaluator`: Repository evaluation with confidence
+   - `GitHubAPIClient`: GitHub API with rate limiting
+   - `RepositoryAnalyzer`: Content analysis
+   - Will be used by `research snapshot` and `research collect`
 
-**Phase 5**: Migration & polish (Days 12-13)
+3. **Smart Repo Fetcher** ([curator/github/smart_fetcher.py](curator/github/smart_fetcher.py))
+   - Multi-stage analysis for cost optimization
+   - Will be used by `research collect` for discovery
 
-- [ ] Deprecation warnings
-- [ ] Migration guide
-- [ ] Documentation updates
+## Important Notes for Next Session
 
-## Key Technical Details
+### What to Do Next
 
-### Repository Tracking System (Just Committed)
+1. **Continue Phase 1**: Add CLI commands
+   - Integrate `ResearchManager` into `curator/__main__.py`
+   - Implement `research` command group with subcommands
+   - Test workspace creation and management
 
-**Location**: [curator/tracking/](curator/tracking/)
+2. **When Phase 1 is complete**:
+   - Commit with: "feat: Add research workspace management (Phase 1)"
+   - Test suite for ResearchManager
+   - Move to Phase 2: Evaluation & Snapshots
 
-**Modules**:
+### Design Decisions Made
 
-- `repo_tracker.py` (444 lines) - Git operations, cloning, syncing
-- `curation_file_manager.py` (84 lines) - CURATION.md formatting
-- `review_generator.py` (259 lines) - LLM-generated reviews
-- `__init__.py` (7 lines) - Module exports
+- Research names are sanitized for filesystem safety
+- YAML config for human-readability and git-friendliness
+- Workspace structure: config.yaml + repos/ + snapshots/ + reports/
+- Reuse existing tracking/evaluation components
+- Self-contained workspaces (no shared state between research topics)
 
-**Storage**: `~/.github-curator/tracked/{org}/{repo}/`
+### Key Files
 
-**Key Features**:
+- Design: [docs/RESEARCH_ARCHITECTURE_REDESIGN.md](docs/RESEARCH_ARCHITECTURE_REDESIGN.md)
+- Implementation: [curator/research/manager.py](curator/research/manager.py)
+- CLI integration: [curator/\_\_main\_\_.py](curator/__main__.py) (next up)
 
-- Git-native (uses git for versioning)
-- `.curator/` directory for files
-- Dual files: CURATION.md (history) + REVIEW.md (current)
-- Tag strategy: `curation-NNN-{date}` and `review-NNN-{date}`
-- Branch syncing (`review` pulls all branches)
+## Session Wrap-Up
 
-### Smart Repo Fetcher
+### Completed Today
 
-**Location**: [curator/github/smart_fetcher.py](curator/github/smart_fetcher.py) (540+ lines)
+1. ✅ **Tracking System** - Fully implemented and tested
+2. ✅ **Architecture Redesign** - Complete design document created
+3. ✅ **Research Module** - Core workspace management implemented
+4. ✅ **New Branch** - `feature/research-architecture` created
 
-**Modes**: fast → standard → thorough → exhaustive
+### In Progress
 
-**Performance**: 50-70% cost reduction, 3-5x speedup
-
-**Tests**: [tests/unit/test_smart_fetcher.py](tests/unit/test_smart_fetcher.py) (13 tests)
-
-## Documentation
-
-### Existing
-
-- [docs/REPO_TRACKING.md](docs/REPO_TRACKING.md) - Tracking system guide
-- [docs/REVIEW_COMMAND.md](docs/REVIEW_COMMAND.md) - Review command reference
-- [docs/TESTING.md](docs/TESTING.md) - Testing guide
-- [examples/tracking_example.py](examples/tracking_example.py) - Demo script
-
-### New
-
-- [docs/RESEARCH_ARCHITECTURE_REDESIGN.md](docs/RESEARCH_ARCHITECTURE_REDESIGN.md) - Complete redesign plan
-
-## Immediate Next Steps
-
-1. **Review design doc** with user
-2. **Create feature branch**: `feature/research-architecture`
-3. **Start Phase 1 implementation**:
-   - Create `curator/research/` module
-   - Implement `ResearchManager` class
-   - `research init` command
-   - Research workspace structure
-
-## Important Notes
-
-### Design Decisions
-
-**Research-scoped tracking**:
-
-- Each topic is self-contained workspace
-- Repos live under `research/<topic>/repos/`
-- Multiple research projects don't conflict
-
-**Snapshot-based evaluation**:
-
-- Named snapshots (user-provided + timestamp)
-- JSON format for comparison
-- Enables time-series analysis
-
-**Reuse existing components**:
-
-- `IntentStructurer` for theme → dimensions
-- `MetacognitiveEvaluator` for evaluation
-- `RepoTracker` for git operations
-- `ReviewGenerator` for LLM content
-
-**New components needed**:
-
-- `ResearchManager` - Workspace CRUD
-- `SnapshotManager` - Snapshot creation/storage
-- `ComparisonEngine` - Diff between snapshots
-- `ReportGenerator` - Publishing-ready content
-
-### Migration Strategy
-
-- Keep old commands with deprecation warnings
-- Provide migration script: old tracked → research
-- Phase 5 handles smooth transition
-
-## Session Notes
-
-### User's Feedback
-
-User clarified actual workflow is **time-series research**:
-
-- Research topic evolution over time
-- Periodic discovery + updates
-- Publishing initial + update reports
-- Need for meaningful comparison over time
-
-This led to complete architecture redesign around "research workspaces" concept.
+- **Phase 1 CLI Integration** - Need to add commands to `__main__.py`
 
 ### Key Insights
 
-1. **Separation needed**: Exploration vs tracking vs publishing
-2. **Time-series is key**: Not just current state, but evolution
-3. **Publishing focus**: Output should be blog-post ready
-4. **Topic-scoped**: All repos belong to research topic
-5. **Snapshot comparison**: Core value proposition
-
-### What's Clear
-
-- User workflow is well-defined now
-- Research workspace concept maps perfectly
-- Reuse existing tracking infrastructure
-- Clean command structure
-- Implementation plan is solid
-
-### Ready to Implement
-
-All design decisions made:
-
-- ✅ Architecture designed
-- ✅ Commands defined
-- ✅ Data structures specified
-- ✅ Implementation phases planned
-- ✅ Migration strategy clear
-
-**Waiting for**: User approval to start implementation
+- User workflow is time-series research (not one-off curation)
+- Commands need clear separation: setup → collect → snapshot → publish → refresh
+- Research workspaces are self-contained (no conflicts between topics)
+- Snapshot comparison is core value (track evolution over time)
+- Reuse existing evaluation/tracking infrastructure
