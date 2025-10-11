@@ -20,6 +20,7 @@ from curator.github.api_client import GitHubAPIClient  # noqa: E402
 from curator.github.repo_analyzer import RepositoryAnalyzer  # noqa: E402
 from curator.github.smart_fetcher import SmartRepoFetcher  # noqa: E402
 from curator.outputs.report_generator import ReportGenerator  # noqa: E402
+from curator.research import ResearchManager  # noqa: E402
 
 
 def parse_star_count(value: Optional[str]) -> Optional[int]:
@@ -1161,6 +1162,343 @@ def setup():
         click.echo("\nSetup incomplete. Please resolve issues above.")
     else:
         click.echo("\n✅ Setup complete! Ready to curate.")
+
+
+@cli.group()
+def research():
+    """Research workspace management for time-series curation.
+
+    Research workspaces provide self-contained environments for tracking
+    topic evolution over time. Each workspace manages repositories, snapshots,
+    and generated reports for a specific research theme.
+    """
+    pass
+
+
+@research.command("init")
+@click.argument("name")
+@click.option("--query", "-q", required=True, help="GitHub search query")
+@click.option("--focus", "-f", multiple=True, help="Focus areas for evaluation")
+@click.option("--exclude", "-e", multiple=True, help="Exclusion criteria")
+@click.option("--min-stars", type=int, help="Minimum stars for search")
+@click.option("--max-age-days", type=int, help="Maximum age in days since last push")
+@click.option("--limit", "-l", type=int, help="Maximum repositories per search")
+def research_init(
+    name: str,
+    query: str,
+    focus: tuple,
+    exclude: tuple,
+    min_stars: Optional[int],
+    max_age_days: Optional[int],
+    limit: Optional[int],
+):
+    """Initialize a new research workspace.
+
+    NAME: Research workspace name (e.g., "python-async-2025")
+
+    This creates a self-contained workspace for tracking a research topic over time,
+    including repository collection, evaluation snapshots, and report generation.
+
+    Examples:
+
+        curator research init python-async-2025 \\
+            --query "python async framework" \\
+            --focus "performance" --focus "type safety"
+
+        curator research init web-security \\
+            --query "web application security" \\
+            --min-stars 1000 \\
+            --max-age-days 180
+    """
+    try:
+        manager = ResearchManager()
+
+        click.echo(f"🔬 Initializing research workspace: {name}")
+        click.echo(f"   Query: {query}")
+
+        if focus:
+            click.echo(f"   Focus areas: {', '.join(focus)}")
+        if exclude:
+            click.echo(f"   Exclusions: {', '.join(exclude)}")
+        click.echo("")
+
+        # Create workspace with research manager
+        # Note: focus/exclude are comma-separated strings in manager API
+        focus_str = ",".join(focus) if focus else None
+        exclude_str = ",".join(exclude) if exclude else None
+
+        info = manager.create(
+            name=name,
+            query=query,
+            focus=focus_str,
+            exclude=exclude_str,
+            min_stars=min_stars,
+            max_age_days=max_age_days,
+        )
+
+        click.echo("✅ Research workspace created!")
+        click.echo(f"   Path: {info.local_path}")
+        click.echo("")
+        click.echo("📁 Workspace structure:")
+        click.echo("   ├── config.yaml         # Research configuration")
+        click.echo("   ├── repos/              # Cloned repositories")
+        click.echo("   ├── snapshots/          # Evaluation snapshots")
+        click.echo("   └── reports/            # Generated reports")
+        click.echo("")
+        click.echo("Next steps:")
+        click.echo("   # Collect repositories")
+        click.echo(f"   curator research collect {name}")
+        click.echo("")
+        click.echo("   # Add specific repository")
+        click.echo(f"   curator research add {name} owner/repo")
+
+    except ValueError as e:
+        click.echo(f"❌ Error: {e}", err=True)
+        raise click.Abort() from None
+    except Exception as e:
+        click.echo(f"❌ Unexpected error: {type(e).__name__}: {e}", err=True)
+        raise click.Abort() from None
+
+
+@research.command("list")
+def research_list():
+    """List all research workspaces.
+
+    Displays all research workspaces with their status, including repository
+    count, snapshot count, and last update time.
+
+    Example:
+
+        curator research list
+    """
+    try:
+        manager = ResearchManager()
+        workspaces = manager.list_research()
+
+        if not workspaces:
+            click.echo("📭 No research workspaces found")
+            click.echo(f"   Looking in: {manager.base_path}")
+            click.echo("")
+            click.echo("To create a research workspace:")
+            click.echo('   curator research init <name> --query "search query"')
+            return
+
+        click.echo(f"🔬 Research Workspaces ({len(workspaces)})")
+        click.echo("")
+
+        for info in sorted(workspaces, key=lambda x: x.last_updated, reverse=True):
+            click.echo(f"• {info.name}")
+            click.echo(f"  Query: {info.query}")
+            click.echo(f"  Repositories: {info.repo_count}")
+            click.echo(f"  Snapshots: {info.snapshot_count}")
+            if info.last_updated:
+                click.echo(f"  Last updated: {info.last_updated.strftime('%Y-%m-%d %H:%M UTC')}")
+            click.echo("")
+
+    except Exception as e:
+        click.echo(f"❌ Error: {type(e).__name__}: {e}", err=True)
+        raise click.Abort() from None
+
+
+@research.command("show")
+@click.argument("name")
+def research_show(name: str):
+    """Show detailed information about a research workspace.
+
+    NAME: Research workspace name
+
+    Displays configuration, repository list, snapshots, and recent activity.
+
+    Example:
+
+        curator research show python-async-2025
+    """
+    try:
+        manager = ResearchManager()
+
+        if not manager.exists(name):
+            click.echo(f"❌ Research workspace '{name}' not found", err=True)
+            click.echo("")
+            click.echo("Available workspaces:")
+            workspaces = manager.list_research()
+            for ws in workspaces:
+                click.echo(f"   • {ws.name}")
+            raise click.Abort()
+
+        # Load configuration
+        config = manager.load_config(name)
+
+        click.echo(f"🔬 Research Workspace: {config.name}")
+        click.echo("")
+        click.echo("Configuration:")
+        click.echo(f"   Query: {config.query}")
+        click.echo(f"   Created: {config.created.strftime('%Y-%m-%d %H:%M UTC')}")
+
+        if config.theme.get("focus"):
+            click.echo(f"   Focus areas: {config.theme['focus']}")
+        if config.theme.get("exclude"):
+            click.echo(f"   Exclusions: {config.theme['exclude']}")
+
+        if config.search:
+            click.echo("")
+            click.echo("Search parameters:")
+            for key, value in config.search.items():
+                if value is not None:
+                    click.echo(f"   {key}: {value}")
+
+        click.echo("")
+        click.echo("Workspace:")
+        click.echo(f"   Path: {manager.get_research_path(name)}")
+
+        # Count repos
+        repos_path = manager.get_repos_path(name)
+        repo_count = len(list(repos_path.iterdir())) if repos_path.exists() else 0
+        click.echo(f"   Repositories: {repo_count}")
+
+        # Count snapshots
+        snapshots_path = manager.get_snapshots_path(name)
+        snapshot_count = len(list(snapshots_path.glob("*.json"))) if snapshots_path.exists() else 0
+        click.echo(f"   Snapshots: {snapshot_count}")
+
+        # List snapshots if any
+        if snapshot_count > 0:
+            click.echo("")
+            click.echo("Snapshots:")
+            for snapshot_file in sorted(snapshots_path.glob("*.json")):
+                snapshot_name = snapshot_file.stem
+                # Get file mtime
+                import time
+
+                mtime = time.localtime(snapshot_file.stat().st_mtime)
+                timestamp = time.strftime("%Y-%m-%d %H:%M", mtime)
+                click.echo(f"   • {snapshot_name} ({timestamp})")
+
+        click.echo("")
+        click.echo("Next steps:")
+        if repo_count == 0:
+            click.echo(f"   curator research collect {name}")
+        elif snapshot_count == 0:
+            click.echo(f"   curator research snapshot {name} --name baseline")
+        else:
+            click.echo(f"   curator research refresh {name}")
+            click.echo(f"   curator research report {name}")
+
+    except ValueError as e:
+        click.echo(f"❌ Error: {e}", err=True)
+        raise click.Abort() from None
+    except Exception as e:
+        click.echo(f"❌ Unexpected error: {type(e).__name__}: {e}", err=True)
+        raise click.Abort() from None
+
+
+@research.command("add")
+@click.argument("name")
+@click.argument("repo_url")
+def research_add(name: str, repo_url: str):
+    """Add a repository to a research workspace.
+
+    NAME: Research workspace name
+    REPO_URL: GitHub repository URL or owner/repo format
+
+    Clones the repository into the research workspace for evaluation.
+
+    Examples:
+
+        curator research add python-async-2025 https://github.com/fastapi/fastapi
+        curator research add python-async-2025 fastapi/fastapi
+    """
+    try:
+        manager = ResearchManager()
+
+        if not manager.exists(name):
+            click.echo(f"❌ Research workspace '{name}' not found", err=True)
+            raise click.Abort()
+
+        # Parse repo URL
+        if repo_url.startswith("http"):
+            # Extract owner/repo from URL
+            parts = repo_url.rstrip("/").split("/")
+            if len(parts) >= 2:
+                repo = f"{parts[-2]}/{parts[-1]}"
+            else:
+                click.echo(f"❌ Invalid repository URL: {repo_url}", err=True)
+                raise click.Abort()
+        else:
+            repo = repo_url
+
+        click.echo(f"📦 Adding repository to research: {name}")
+        click.echo(f"   Repository: {repo}")
+        click.echo("")
+
+        # Use RepoTracker to clone
+        from curator.tracking import RepoTracker
+
+        repos_path = manager.get_repos_path(name)
+        tracker = RepoTracker(repos_path)
+
+        full_url = repo_url if repo_url.startswith("http") else f"https://github.com/{repo}"
+        info = tracker.track(full_url)
+
+        click.echo("✅ Repository added successfully!")
+        click.echo(f"   Organization: {info.org}")
+        click.echo(f"   Repository: {info.repo}")
+        click.echo(f"   Local path: {info.local_path}")
+        click.echo("")
+        click.echo("Next steps:")
+        click.echo(f"   curator research snapshot {name} --name baseline")
+
+    except ValueError as e:
+        click.echo(f"❌ Error: {e}", err=True)
+        raise click.Abort() from None
+    except Exception as e:
+        click.echo(f"❌ Unexpected error: {type(e).__name__}: {e}", err=True)
+        raise click.Abort() from None
+
+
+@research.command("delete")
+@click.argument("name")
+@click.option("--confirm", is_flag=True, help="Skip confirmation prompt")
+def research_delete(name: str, confirm: bool):
+    """Delete a research workspace.
+
+    NAME: Research workspace name
+
+    WARNING: This permanently deletes the workspace including all repositories,
+    snapshots, and reports. This action cannot be undone.
+
+    Example:
+
+        curator research delete old-project --confirm
+    """
+    try:
+        manager = ResearchManager()
+
+        if not manager.exists(name):
+            click.echo(f"❌ Research workspace '{name}' not found", err=True)
+            raise click.Abort()
+
+        # Confirm deletion
+        if not confirm:
+            workspace_path = manager.get_research_path(name)
+            click.echo(f"⚠️  This will permanently delete research workspace: {name}")
+            click.echo(f"   Path: {workspace_path}")
+            click.echo("")
+
+            if not click.confirm("Are you sure you want to continue?"):
+                click.echo("Cancelled.")
+                return
+
+        # Delete workspace (pass confirm=True to manager)
+        manager.delete(name, confirm=True)
+
+        click.echo(f"✅ Research workspace '{name}' deleted successfully")
+
+    except ValueError as e:
+        click.echo(f"❌ Error: {e}", err=True)
+        raise click.Abort() from None
+    except Exception as e:
+        click.echo(f"❌ Unexpected error: {type(e).__name__}: {e}", err=True)
+        raise click.Abort() from None
 
 
 if __name__ == "__main__":
