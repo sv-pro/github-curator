@@ -31,14 +31,22 @@ Branch: `feature/research-architecture`
 - All tests passing (black, ruff, mypy)
 - Commit: 40243f4
 
+**Milestone 4**: Phase 1 - Research CLI Commands ✅ COMPLETE
+
+- Added full CLI integration for research workspaces (~340 lines)
+- Commands: `init`, `list`, `show`, `add`, `delete`
+- Tested end-to-end with workspace creation, management, deletion
+- All linters passing (black, ruff, mypy)
+- Commit: 72679e8
+
 ## Recent Commits
 
 ```bash
+72679e8 feat: Complete Phase 1 - Research workspace CLI commands
 40243f4 feat: Add research workspace management (Phase 1 - partial)
 fa843e8 docs: Update context with research module progress
 c1c06d2 docs: Add research architecture redesign plan
 9cf6253 feat: Add repository tracking system with git-native storage
-f302163 docs: Update copilot-instructions with load-context command
 ```
 
 ## Current Status
@@ -47,32 +55,38 @@ f302163 docs: Update copilot-instructions with load-context command
 
 - **Branch**: `feature/research-architecture`
 - **Status**: ✅ Clean working directory (all committed)
-- **Latest commit**: Research workspace management (40243f4)
-- **Parent branch**: `feature/smart-repo-fetcher`
-- **Phase 1 Progress**: 60% complete
+- **Latest commit**: Phase 1 CLI commands (72679e8)
+- **Phase 1 Progress**: ✅ 100% COMPLETE
 
 ### What's Working
 
-1. **Repository Tracking** ([curator/tracking/](curator/tracking/))
+1. **Research Workspace System** ✅ NEW
+   - **Backend**: [curator/research/manager.py](curator/research/manager.py) - ResearchManager class
+   - **CLI**: [curator/\_\_main\_\_.py](curator/__main__.py) - `curator research` command group
+   - **Commands**: `init`, `list`, `show`, `add`, `delete`
+   - **Storage**: `~/.github-curator/research/<name>/` with YAML config
+   - **Status**: Phase 1 complete, ready for Phase 2 (evaluation & snapshots)
+
+2. **Repository Tracking** ([curator/tracking/](curator/tracking/))
    - Git-native storage in `~/.github-curator/tracked/`
    - Commands: `track`, `list-tracked`, `curate-tracked`, `review`
    - Files: `.curator/CURATION.md` (history) + `.curator/REVIEW.md` (current)
    - LLM-generated rich reviews
    - Full git traceability with tags
 
-2. **Smart Repo Fetcher** ([curator/github/smart_fetcher.py](curator/github/smart_fetcher.py))
+3. **Smart Repo Fetcher** ([curator/github/smart_fetcher.py](curator/github/smart_fetcher.py))
    - Multi-stage analysis (50-70% cost reduction)
    - 40+ passing tests
    - Fully integrated
 
-3. **Testing Infrastructure**
+4. **Testing Infrastructure**
    - Phase gates: `make test-phase-gate`, `make test-phase-gate-strict`
    - 70%+ coverage
    - CI/CD pipeline
 
 ## What Was Implemented This Session
 
-### New Module: Research Management (~340 lines)
+### Phase 1 Complete: Research Workspace Management (~680 lines total)
 
 **[curator/research/manager.py](curator/research/manager.py)** (335 lines):
 
@@ -93,6 +107,18 @@ f302163 docs: Update copilot-instructions with load-context command
 **[curator/research/\_\_init\_\_.py](curator/research/__init__.py)** (5 lines):
 
 - Module exports: `ResearchManager`, `ResearchConfig`, `ResearchInfo`
+
+**[curator/\_\_main\_\_.py](curator/__main__.py)** (+340 lines):
+
+- New `research` command group with 5 subcommands:
+  - `init` - Create workspace with query, focus, exclusions, search params
+  - `list` - Display all workspaces with status summary
+  - `show` - Detailed workspace info, config, repos, snapshots
+  - `add` - Add repository to workspace (uses RepoTracker)
+  - `delete` - Remove workspace with confirmation prompt
+- Rich CLI output with emojis, structured info, helpful next steps
+- Error handling and validation throughout
+- Integration with existing ResearchManager and RepoTracker
 
 **Workspace Structure** (created by ResearchManager):
 
@@ -130,21 +156,31 @@ f302163 docs: Update copilot-instructions with load-context command
 
 ### Implementation Progress
 
-**Phase 1: Core Infrastructure** (Days 1-2) - 60% COMPLETE
+**Phase 1: Core Infrastructure** ✅ 100% COMPLETE
 
 - ✅ Create `curator/research/` module
 - ✅ `ResearchManager` class with workspace CRUD
 - ✅ `ResearchConfig` with YAML persistence
 - ✅ Workspace directory structure
+- ✅ CLI command integration (`init`, `list`, `show`, `add`, `delete`)
 - ✅ All linters passing (black, ruff, mypy)
-- ✅ Code committed (40243f4)
-- ⏳ **Next up**: CLI command integration
-  - `curator research init` - Create workspace
-  - `curator research list` - Show all research
-  - `curator research show` - Display research details
-  - `curator research add` - Add repos to research
+- ✅ End-to-end testing complete
+- ✅ Code committed (72679e8)
 
-**Implementation**: Add `research` command group to [curator/\_\_main\_\_.py](curator/__main__.py)
+**Phase 2: Evaluation & Snapshots** (Days 3-4) - NEXT UP
+
+- ⏳ `curator research collect` - Search and add repositories
+  - Integration with AdaptiveSearchStrategy
+  - Batch repo addition to workspace
+  - Progress reporting
+- ⏳ `curator research snapshot` - Create evaluation snapshots
+  - Run full evaluation pipeline on workspace repos
+  - Save results as timestamped JSON snapshots
+  - Track snapshot metadata in config.yaml
+- ⏳ Snapshot comparison utilities
+  - Load and compare two snapshots
+  - Identify new/removed/changed repos
+  - Score deltas and trend analysis
 
 ### User's Workflow (Design Goal)
 
@@ -204,18 +240,28 @@ curator research report python-async-2025 --compare-from baseline --compare-to u
 
 See [docs/RESEARCH_ARCHITECTURE_REDESIGN.md](docs/RESEARCH_ARCHITECTURE_REDESIGN.md) for complete 5-phase plan.
 
-**Current Phase**: Phase 1 (Core Infrastructure) - 60% complete
+**Current Phase**: Phase 2 (Evaluation & Snapshots) - READY TO START
 
 **Immediate Next Tasks**:
 
-1. Add CLI commands to [curator/\_\_main\_\_.py](curator/__main__.py):
-   - `curator research init` - Create new research workspace
-   - `curator research list` - Show all research workspaces
-   - `curator research show <name>` - Display research details
-   - `curator research add <name> <repo-url>` - Add repos to research
-2. Test commands with real usage
-3. Commit Phase 1 implementation
-4. Move to Phase 2 (Evaluation & Snapshots)
+1. **Implement `curator research collect`**:
+   - Accept workspace name and search query (or use config query)
+   - Use AdaptiveSearchStrategy to find repositories
+   - Batch add repos using RepoTracker
+   - Show progress and summary
+
+2. **Implement `curator research snapshot`**:
+   - Accept workspace name and snapshot name
+   - Load workspace config and repos
+   - Run evaluation pipeline on each repo
+   - Save results to `snapshots/<name>-<timestamp>.json`
+   - Update config.yaml with snapshot metadata
+
+3. **Test Phase 2 commands**:
+   - Create test workspace
+   - Collect repos
+   - Create baseline snapshot
+   - Verify JSON output and metadata
 
 ## Key Technical Context
 
