@@ -722,6 +722,412 @@ def validate_config():
 
 
 @cli.command()
+@click.argument("repo_url")
+@click.option(
+    "--base-path", help="Base directory for tracked repos (default: ~/.github-curator/tracked)"
+)
+def track(repo_url: str, base_path: Optional[str]):
+    """Start tracking a repository for curation history.
+
+    REPO_URL: GitHub repository URL (e.g., https://github.com/owner/repo)
+
+    This clones the repository locally and initializes CURATION.md and REVIEW.md
+    files for tracking evaluation history over time.
+
+    Examples:
+
+        curator track https://github.com/fastapi/fastapi
+        curator track https://github.com/pallets/flask --base-path ~/my-curated-repos
+    """
+    from curator.tracking import RepoTracker
+
+    try:
+        tracker = RepoTracker(Path(base_path) if base_path else None)
+
+        click.echo(f"📦 Tracking repository: {repo_url}")
+        click.echo("")
+
+        info = tracker.track(repo_url)
+
+        click.echo("✅ Successfully initialized tracking!")
+        click.echo(f"   Organization: {info.org}")
+        click.echo(f"   Repository: {info.repo}")
+        click.echo(f"   Local path: {info.local_path}")
+        click.echo("   Branch: curation")
+        click.echo("")
+        click.echo("📝 Files created:")
+        click.echo("   - CURATION.md (evaluation history)")
+        click.echo("   - REVIEW.md (latest review)")
+        click.echo("")
+        click.echo("Next steps:")
+        click.echo(f'   curator curate-tracked {info.org}/{info.repo} --theme "Your theme"')
+
+    except ValueError as e:
+        click.echo(f"❌ Error: {e}", err=True)
+        raise click.Abort() from None
+    except Exception as e:
+        click.echo(f"❌ Unexpected error: {type(e).__name__}: {e}", err=True)
+        raise click.Abort() from None
+
+
+@cli.command()
+@click.option("--base-path", help="Base directory for tracked repos")
+def list_tracked(base_path: Optional[str]):
+    """List all tracked repositories."""
+    from curator.tracking import RepoTracker
+
+    tracker = RepoTracker(Path(base_path) if base_path else None)
+    tracked = tracker.list_tracked()
+
+    if not tracked:
+        click.echo("📭 No tracked repositories found")
+        click.echo(f"   Looking in: {tracker.base_path}")
+        click.echo("")
+        click.echo("To start tracking a repository:")
+        click.echo("   curator track https://github.com/owner/repo")
+        return
+
+    click.echo(f"📚 Tracked Repositories ({len(tracked)})")
+    click.echo("")
+
+    for info in sorted(tracked, key=lambda x: x.last_updated, reverse=True):
+        click.echo(f"• {info.org}/{info.repo}")
+        click.echo(f"  Path: {info.local_path}")
+        click.echo(f"  Curations: {info.curation_count}")
+        click.echo(f"  Last updated: {info.last_updated.strftime('%Y-%m-%d %H:%M UTC')}")
+        click.echo("")
+
+
+@cli.command()
+@click.argument("repo")  # org/repo format
+@click.argument("theme")
+@click.option("--base-path", help="Base directory for tracked repos")
+@click.option("--config", "-c", default="config/curator.yaml", help="Configuration file path")
+@click.option("--use-git-clone", is_flag=True, help="Clone repo locally for analysis")
+def curate_tracked(
+    repo: str, theme: str, base_path: Optional[str], config: str, use_git_clone: bool
+):
+    """Curate a tracked repository and update its history.
+
+    REPO: Repository in org/repo format (e.g., fastapi/fastapi)
+    THEME: Curation theme (e.g., "Web frameworks for async Python")
+
+    This evaluates the repository, appends to CURATION.md, updates REVIEW.md,
+    and creates a git commit + tag for traceability.
+
+    Examples:
+
+        curator curate-tracked fastapi/fastapi "Modern async web frameworks"
+        curator curate-tracked pallets/flask "Beginner-friendly web frameworks"
+    """
+    from curator.core.intent_structuring import IntentStructurer
+    from curator.core.metacognitive_eval import MetacognitiveEvaluator
+    from curator.github.api_client import GitHubAPIClient, SearchResult
+    from curator.github.repo_analyzer import RepositoryAnalyzer
+    from curator.tracking import CurationFileManager, RepoTracker, ReviewGenerator
+
+    try:
+        # Initialize tracker
+        tracker = RepoTracker(Path(base_path) if base_path else None)
+        org, repo_name = repo.split("/")
+
+        if not tracker.is_tracked(org, repo_name):
+            click.echo(f"❌ Repository {repo} is not tracked", err=True)
+            click.echo(f"   Run: curator track https://github.com/{repo}", err=True)
+            raise click.Abort()
+
+        click.echo(f"🎯 Curating tracked repository: {repo}")
+        click.echo(f"   Theme: {theme}")
+        click.echo("")
+
+        # Update from upstream
+        click.echo("🔄 Checking for updates from upstream...")
+        has_updates = tracker.update_from_upstream(org, repo_name)
+        if has_updates:
+            click.echo("   ✓ Pulled latest changes")
+        else:
+            click.echo("   ✓ Already up to date")
+        click.echo("")
+
+        # Initialize curation components
+        click.echo("🧠 Initializing evaluation...")
+        structurer = IntentStructurer(config)
+        github_client = GitHubAPIClient(config)
+        analyzer = RepositoryAnalyzer(github_client, config, use_git_clone=use_git_clone)
+        evaluator = MetacognitiveEvaluator(config)
+
+        # Structure intent
+        click.echo("📋 Structuring intent...")
+        intent = structurer.structure_theme(theme)
+        click.echo(f"   Created {len(intent.dimensions)} evaluation dimensions")
+        click.echo("")
+
+        # Get repository info
+        click.echo("📊 Fetching repository data...")
+        gh_repo = github_client.get_repository(repo)
+        search_result = SearchResult(
+            name=gh_repo.name,
+            owner=gh_repo.owner.login,
+            full_name=gh_repo.full_name,
+            description=gh_repo.description or "",
+            url=gh_repo.html_url,
+            stars=gh_repo.stargazers_count,
+            last_updated=gh_repo.pushed_at,
+            language=gh_repo.language or "Unknown",
+            license_name=gh_repo.license.name if gh_repo.license else None,
+            topics=list(gh_repo.get_topics()),
+        )
+
+        # Analyze repository
+        click.echo("🔍 Analyzing repository content...")
+        context = analyzer.analyze_repository(search_result)
+        context_summary = analyzer.get_evaluation_context_summary(context)
+
+        # Evaluate
+        click.echo("🤖 Evaluating with Claude...")
+        evaluation = evaluator.evaluate_repository(context, intent, context_summary)
+
+        click.echo(f"   ✓ Score: {evaluation.overall_relevance:.2f}")
+        click.echo(f"   ✓ Confidence: {evaluation.confidence:.2f}")
+        click.echo("")
+
+        # Format CURATION.md entry
+        click.echo("📝 Generating curation files...")
+
+        # Get current commit hash of the evaluated repo
+        repo_path = tracker.get_repo_path(org, repo_name)
+        import subprocess
+
+        result = subprocess.run(
+            ["git", "-C", str(repo_path), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        repo_commit = result.stdout.strip()
+
+        # Prepare dimension data
+        dimensions = {}
+        evidence_items = []
+
+        for dim_score in evaluation.dimension_scores:
+            dimensions[dim_score.dimension] = {
+                "score": dim_score.score,
+                "confidence": dim_score.confidence,
+                "reasoning": dim_score.reasoning,
+            }
+            # Collect evidence from indicators
+            for indicator in dim_score.found_indicators[:3]:  # Top 3 per dimension
+                evidence_items.append(f"{indicator.indicator}: {indicator.evidence}")
+
+        # Generate CURATION.md entry
+        curation_content = CurationFileManager.format_entry(
+            theme=theme,
+            overall_score=evaluation.overall_relevance,
+            confidence=evaluation.confidence,
+            dimensions=dimensions,
+            evidence=evidence_items[:10],  # Top 10 total
+            repo_commit=repo_commit,
+        )
+
+        # Generate REVIEW.md content with LLM
+        review_generator = ReviewGenerator()
+        review_content = review_generator.generate_review(
+            org=org,
+            repo=repo_name,
+            theme=theme,
+            overall_score=evaluation.overall_relevance,
+            confidence=evaluation.confidence,
+            dimensions=dimensions,
+            evidence=evidence_items[:10],
+            repo_description=search_result.description,
+            readme_excerpt=context.readme_content[:1000] if context.readme_content else None,
+        )
+
+        # Add curation to tracked repo
+        tag = tracker.add_curation(org, repo_name, curation_content, review_content, theme)
+
+        click.echo("   ✓ Updated CURATION.md")
+        click.echo("   ✓ Updated REVIEW.md")
+        click.echo(f"   ✓ Created commit and tag: {tag}")
+        click.echo("")
+
+        click.echo("✨ Curation complete!")
+        click.echo("")
+        click.echo("View history:")
+        click.echo(f"   cd {repo_path}")
+        click.echo("   git log --oneline")
+        click.echo("   cat .curator/CURATION.md")
+        click.echo("   cat .curator/REVIEW.md")
+
+    except ValueError as e:
+        click.echo(f"❌ Error: {e}", err=True)
+        raise click.Abort() from None
+    except Exception as e:
+        click.echo(f"❌ Unexpected error: {type(e).__name__}: {e}", err=True)
+        import traceback
+
+        traceback.print_exc()
+        raise click.Abort() from None
+
+
+@cli.command()
+@click.argument("repo")  # org/repo format
+@click.argument("theme")
+@click.option("--base-path", help="Base directory for tracked repos")
+@click.option("--config", "-c", default="config/curator.yaml", help="Configuration file path")
+@click.option("--use-git-clone", is_flag=True, help="Clone repo locally for analysis")
+def review(repo: str, theme: str, base_path: Optional[str], config: str, use_git_clone: bool):
+    """Quick review update for tracked repository.
+
+    REPO: Repository in org/repo format (e.g., fastapi/fastapi)
+    THEME: Review theme (e.g., "Modern Python web frameworks")
+
+    This is a lighter version of curate-tracked:
+    - Pulls all branches from upstream
+    - Evaluates the main branch
+    - Updates REVIEW.md (does NOT append to CURATION.md)
+    - Creates git commit + tag on curation branch
+
+    Use this for quick review updates without adding to full curation history.
+
+    Examples:
+
+        curator review fastapi/fastapi "Modern async web frameworks"
+        curator review pallets/flask "Python web frameworks 2025"
+    """
+    from curator.core.intent_structuring import IntentStructurer
+    from curator.core.metacognitive_eval import MetacognitiveEvaluator
+    from curator.github.api_client import GitHubAPIClient, SearchResult
+    from curator.github.repo_analyzer import RepositoryAnalyzer
+    from curator.tracking import RepoTracker, ReviewGenerator
+
+    try:
+        # Initialize tracker
+        tracker = RepoTracker(Path(base_path) if base_path else None)
+        org, repo_name = repo.split("/")
+
+        if not tracker.is_tracked(org, repo_name):
+            click.echo(f"❌ Repository {repo} is not tracked", err=True)
+            click.echo(f"   Run: curator track https://github.com/{repo}", err=True)
+            raise click.Abort()
+
+        click.echo(f"🔄 Reviewing tracked repository: {repo}")
+        click.echo(f"   Theme: {theme}")
+        click.echo("")
+
+        # Sync all branches
+        click.echo("📥 Syncing all branches from upstream...")
+        updates = tracker.sync_all_branches(org, repo_name)
+
+        updated_branches = [b for b, updated in updates.items() if updated]
+        if updated_branches:
+            click.echo(f"   ✓ Updated branches: {', '.join(updated_branches)}")
+        else:
+            click.echo("   ✓ All branches up to date")
+        click.echo("")
+
+        # Initialize evaluation components
+        click.echo("🧠 Initializing evaluation...")
+        structurer = IntentStructurer(config)
+        github_client = GitHubAPIClient(config)
+        analyzer = RepositoryAnalyzer(github_client, config, use_git_clone=use_git_clone)
+        evaluator = MetacognitiveEvaluator(config)
+
+        # Structure intent
+        click.echo("📋 Structuring intent...")
+        intent = structurer.structure_theme(theme)
+        click.echo(f"   Created {len(intent.dimensions)} evaluation dimensions")
+        click.echo("")
+
+        # Get repository info
+        click.echo("📊 Fetching repository data...")
+        gh_repo = github_client.get_repository(repo)
+        search_result = SearchResult(
+            name=gh_repo.name,
+            owner=gh_repo.owner.login,
+            full_name=gh_repo.full_name,
+            description=gh_repo.description or "",
+            url=gh_repo.html_url,
+            stars=gh_repo.stargazers_count,
+            last_updated=gh_repo.pushed_at,
+            language=gh_repo.language or "Unknown",
+            license_name=gh_repo.license.name if gh_repo.license else None,
+            topics=list(gh_repo.get_topics()),
+        )
+
+        # Analyze repository
+        click.echo("🔍 Analyzing repository content...")
+        context = analyzer.analyze_repository(search_result)
+        context_summary = analyzer.get_evaluation_context_summary(context)
+
+        # Evaluate
+        click.echo("🤖 Evaluating with Claude...")
+        evaluation = evaluator.evaluate_repository(context, intent, context_summary)
+
+        click.echo(f"   ✓ Score: {evaluation.overall_relevance:.2f}")
+        click.echo(f"   ✓ Confidence: {evaluation.confidence:.2f}")
+        click.echo("")
+
+        # Generate review content
+        click.echo("📝 Generating review...")
+
+        # Prepare dimension data
+        dimensions = {}
+        evidence_items = []
+
+        for dim_score in evaluation.dimension_scores:
+            dimensions[dim_score.dimension] = {
+                "score": dim_score.score,
+                "confidence": dim_score.confidence,
+                "reasoning": dim_score.reasoning,
+            }
+            # Collect evidence from indicators
+            for indicator in dim_score.found_indicators[:3]:  # Top 3 per dimension
+                evidence_items.append(f"{indicator.indicator}: {indicator.evidence}")
+
+        # Generate rich REVIEW.md with LLM
+        review_generator = ReviewGenerator()
+        review_content = review_generator.generate_review(
+            org=org,
+            repo=repo_name,
+            theme=theme,
+            overall_score=evaluation.overall_relevance,
+            confidence=evaluation.confidence,
+            dimensions=dimensions,
+            evidence=evidence_items[:10],
+            repo_description=search_result.description,
+            readme_excerpt=context.readme_content[:1000] if context.readme_content else None,
+        )
+
+        # Update review (not full curation)
+        tag = tracker.update_review(org, repo_name, review_content, theme)
+
+        click.echo("   ✓ Updated .curator/REVIEW.md")
+        click.echo(f"   ✓ Created commit and tag: {tag}")
+        click.echo("")
+
+        click.echo("✨ Review complete!")
+        click.echo("")
+        click.echo("View review:")
+        repo_path = tracker.get_repo_path(org, repo_name)
+        click.echo(f"   cat {repo_path}/.curator/REVIEW.md")
+        click.echo("")
+        click.echo("Note: CURATION.md history was not modified.")
+        click.echo("      Use 'curator curate-tracked' to add full curation entry.")
+
+    except ValueError as e:
+        click.echo(f"❌ Error: {e}", err=True)
+        raise click.Abort() from None
+    except Exception as e:
+        click.echo(f"❌ Unexpected error: {type(e).__name__}: {e}", err=True)
+        import traceback
+
+        traceback.print_exc()
+        raise click.Abort() from None
+
+
+@cli.command()
 def setup():
     """Check setup and environment variables."""
     issues = []
