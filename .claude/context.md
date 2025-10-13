@@ -7,13 +7,21 @@ Branch: `feature/research-architecture`
 
 ### What Was Accomplished This Session
 
-**Bug Fixes**: User Experience Improvements ✅ COMPLETE
+**Feature 1: Bug Fixes** - User Experience Improvements ✅ COMPLETE (Commit: 7cb205e)
 
 - Fixed repo count discrepancy between `list` and `show` commands
 - Added `--resume` flag to `research collect` for interrupted operations
 - Enhanced user messaging for resume mode
-- All linters passing (black, ruff, mypy, pre-commit hooks)
-- Commit: 7cb205e
+
+**Feature 2: LLM Provider Fallback Chain** ✅ COMPLETE (Commits: 57ba3b3, 230fc5c)
+
+- Automatic fallback when Anthropic credit balance depleted
+- Support for Anthropic → OpenAI → Ollama chain
+- New error class: `LLMQuotaExceededError`
+- Fallback provider wrapper with automatic retry
+- Config-driven setup (enabled by default)
+- Comprehensive documentation and demo script
+- **Total**: ~835 lines added across 8 files
 
 **Previous Milestones**:
 
@@ -27,11 +35,12 @@ Branch: `feature/research-architecture`
 ## Recent Commits
 
 ```bash
+230fc5c docs: Add LLM fallback demo script
+57ba3b3 feat: Add LLM provider fallback chain for quota exhaustion
+46b9c4b docs: Update context with bug fix session details
 7cb205e fix: Resolve repo count discrepancy and add resume capability
+170c598 docs: Update context with Phase 3 completion
 fe84891 feat: Complete Phase 3 - Research refresh and snapshot comparison
-91a5f43 docs: Save comprehensive session context
-f442777 docs: Update context with Phase 2 completion
-858a32a feat: Complete Phase 2 - Research evaluation and snapshots
 ```
 
 ## Current Status
@@ -40,11 +49,11 @@ f442777 docs: Update context with Phase 2 completion
 
 - **Branch**: `feature/research-architecture`
 - **Status**: ✅ Clean working directory (all committed)
-- **Latest commit**: Bug fixes for UX (7cb205e)
+- **Latest commit**: LLM fallback system (230fc5c)
 - **Phase 1 Progress**: ✅ 100% COMPLETE
 - **Phase 2 Progress**: ✅ 100% COMPLETE
 - **Phase 3 Progress**: ✅ 100% COMPLETE
-- **Total Lines Added**: ~1,484 lines (340 Phase 1 + 350 Phase 2 + 417 Phase 3 + 340 backend + 37 fixes)
+- **Total Lines Added**: ~2,319 lines (340 Phase 1 + 350 Phase 2 + 417 Phase 3 + 340 backend + 37 fixes + 835 fallback)
 
 ### What's Working
 
@@ -516,3 +525,246 @@ curator research collect python-async-2025 --resume
 - **Resume capability is essential**: Long-running operations (cloning 50+ repos) often get interrupted
 - **User-reported issues reveal real usage patterns**: These fixes came from actual user experience
 - **Clear messaging improves UX**: Different messages for resume vs. normal mode help users understand what's happening
+
+## LLM Provider Fallback Implementation (2025-10-13)
+
+### User Problem
+
+User encountered Anthropic credit exhaustion during curation:
+```
+❌ Error: BadRequestError: Your credit balance is too low to access
+the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.
+```
+
+Wanted automatic fallback to OpenAI or local Ollama to continue work without interruption.
+
+### Solution Overview
+
+Implemented automatic provider fallback chain: **Anthropic → OpenAI → Ollama**
+
+When primary provider fails with quota/credit errors, system automatically tries the next provider in the chain.
+
+### Components Implemented
+
+#### 1. Error Hierarchy Enhancement ([curator/errors.py](curator/errors.py))
+
+Added new error class:
+```python
+class LLMQuotaExceededError(LLMError):
+    """LLM API quota/credit balance exceeded."""
+```
+
+This error is distinct from:
+- `LLMRateLimitError` (temporary throttling)
+- `LLMAuthenticationError` (invalid API key)
+- `LLMAPIError` (general errors)
+
+#### 2. FallbackLLMProvider ([curator/llm/fallback_provider.py](curator/llm/fallback_provider.py))
+
+New provider wrapper class (156 lines):
+- Chains multiple providers with automatic retry
+- Tracks exhausted providers to avoid retry loops
+- Logs failover events for visibility
+- Provides status monitoring via `get_provider_status()`
+
+Key methods:
+- `complete()`: Tries each provider in sequence on failure
+- `get_provider_status()`: Returns current state and exhausted providers
+- `current_provider`: Property exposing active provider
+
+Error handling logic:
+- Catches `LLMQuotaExceededError` and `LLMRateLimitError`
+- Marks provider as exhausted
+- Automatically tries next provider
+- Re-raises if all providers exhausted
+
+#### 3. Factory Enhancements ([curator/llm/factory.py](curator/llm/factory.py))
+
+Added fallback support to factory:
+
+**New function**: `create_llm_provider_from_config(config_path)`
+- Loads LLM config from YAML
+- Reads `fallback_enabled` and `fallback_providers` settings
+- Creates fallback chain automatically
+- Returns `FallbackLLMProvider` if fallbacks configured
+
+**Enhanced function**: `create_llm_provider()`
+- Added `fallback_providers` parameter
+- Builds provider chain recursively
+- Handles provider creation failures gracefully
+
+#### 4. Error Detection ([curator/llm/langchain_provider.py](curator/llm/langchain_provider.py))
+
+Enhanced error detection in `complete()` method:
+```python
+# Detects credit/quota issues
+if any(phrase in error_str for phrase in [
+    "credit balance",
+    "quota exceeded",
+    "insufficient credits",
+    "billing",
+    "payment required",
+]):
+    raise LLMQuotaExceededError(...)
+```
+
+Checks error strings for billing-related keywords before other error types.
+
+#### 5. Configuration ([config/curator.yaml](config/curator.yaml))
+
+Updated LLM section:
+```yaml
+llm:
+  provider: anthropic
+  fallback_enabled: true  # Changed from false
+  fallback_providers:
+    - openai     # Fallback #1: Commercial API
+    - ollama     # Fallback #2: Local model
+```
+
+Now **enabled by default** with two-tier fallback.
+
+#### 6. Documentation ([docs/LLM_FALLBACK.md](docs/LLM_FALLBACK.md))
+
+Comprehensive guide (315 lines):
+- Overview and problem statement
+- Configuration examples for all providers
+- Setup instructions (Anthropic, OpenAI, Ollama)
+- Recommended configurations (dev, prod, testing)
+- Programmatic usage examples
+- Error class reference
+- Best practices and troubleshooting
+
+#### 7. Demo Script ([examples/llm_fallback_demo.py](examples/llm_fallback_demo.py))
+
+Interactive demonstration (197 lines):
+- Demo 1: Basic fallback provider creation
+- Demo 2: Loading from config file
+- Demo 3: Actual LLM completion with fallback
+- Demo 4: Simulated failure scenarios
+
+Run with: `python examples/llm_fallback_demo.py`
+
+### Usage Examples
+
+**Automatic from config** (recommended):
+```python
+from curator.llm import create_llm_provider_from_config
+
+# Reads config, creates fallback chain automatically
+provider = create_llm_provider_from_config()
+response = provider.complete(messages)
+```
+
+**Manual chain**:
+```python
+from curator.llm import create_llm_provider
+
+provider = create_llm_provider(
+    provider="anthropic",
+    fallback_providers=["openai", "ollama"]
+)
+```
+
+**Check status**:
+```python
+if isinstance(provider, FallbackLLMProvider):
+    status = provider.get_provider_status()
+    print(f"Current: {status['current_provider']}")
+    print(f"Exhausted: {status['exhausted_count']}")
+```
+
+### Setup Requirements
+
+**OpenAI fallback**:
+```bash
+pip install langchain-openai openai
+export OPENAI_API_KEY=your_key_here
+```
+
+**Ollama fallback** (free, local):
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+ollama pull llama3.3  # or gemma2
+ollama serve  # http://localhost:11434
+```
+
+### Behavior
+
+**Normal operation**:
+```
+🔄 Attempting LLM completion with provider: anthropic
+✅ Response received from: claude-sonnet-4-5-20250929
+```
+
+**With failover**:
+```
+🔄 Attempting LLM completion with provider: anthropic
+⚠️  Provider anthropic failed: Credit balance too low. Trying next provider...
+🔄 Attempting LLM completion with provider: openai
+✅ Successfully failed over to provider: openai
+```
+
+### Technical Details
+
+**Type safety**:
+- All code passes mypy strict checks
+- Type annotations for Optional[Exception], list[BaseLLMProvider]
+- Proper inheritance from BaseLLMProvider
+
+**Provider independence**:
+- Each provider can have different models configured
+- Provider-specific settings (e.g., Ollama base_url)
+- Fallback works with both LangChain and legacy providers
+
+**Error propagation**:
+- Only quota/rate limit errors trigger fallback
+- Authentication and model errors don't trigger fallback
+- Final error re-raised if all providers exhausted
+
+**State tracking**:
+- `_exhausted_providers` set tracks failed providers
+- `_current_provider_index` tracks active provider
+- Status exposed via `get_provider_status()` method
+
+### Files Modified
+
+- [curator/errors.py](curator/errors.py): +13 lines (new error class)
+- [curator/llm/fallback_provider.py](curator/llm/fallback_provider.py): +156 lines (new file)
+- [curator/llm/factory.py](curator/llm/factory.py): +135 lines, -15 lines (factory enhancements)
+- [curator/llm/langchain_provider.py](curator/llm/langchain_provider.py): +18 lines (error detection)
+- [curator/llm/__init__.py](curator/llm/__init__.py): +7 lines (exports)
+- [config/curator.yaml](config/curator.yaml): +9 lines, -6 lines (enable fallback)
+- [docs/LLM_FALLBACK.md](docs/LLM_FALLBACK.md): +315 lines (new file)
+- [examples/llm_fallback_demo.py](examples/llm_fallback_demo.py): +197 lines (new file)
+
+**Total**: 835 lines added, 21 lines removed
+
+### Testing
+
+All linters passing:
+- ✅ black (formatting)
+- ✅ ruff (linting)
+- ✅ mypy (type checking)
+- ✅ pre-commit hooks
+
+### Next Steps
+
+**Ready for use**:
+- Feature is complete and enabled by default
+- User can test with: `curator research collect <workspace> --resume`
+- Fallback will activate automatically on credit exhaustion
+
+**Future enhancements**:
+- Integration tests with mocked providers
+- Cost tracking across fallback chain
+- Per-provider usage statistics
+- Automatic provider selection based on task type
+
+### Key Insights
+
+- **Fallback enables continuous operation**: No workflow interruption when credits run out
+- **Multi-tier strategy optimal**: Commercial backup + free local fallback provides best coverage
+- **Error detection is critical**: Must distinguish quota from auth/rate limit errors
+- **Config-driven is user-friendly**: Users don't need code changes to enable fallback
+- **Local Ollama as safety net**: Always available when all commercial APIs exhausted
