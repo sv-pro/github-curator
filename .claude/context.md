@@ -23,14 +23,23 @@ Branch: `feature/research-architecture`
 - Comprehensive documentation and demo script
 - **Total**: ~835 lines added across 8 files
 
-**Feature 3: Adaptive Search Fallback Integration** ✅ COMPLETE (Commit: 5810da5)
+**Feature 3: Adaptive Search Fallback Integration** ✅ COMPLETE (Commit: 5810da5, 4da2d71)
 
 - Integrated LLM fallback into AdaptiveSearchStrategy
 - Automatic fallback during query generation (Anthropic → Ollama)
 - Fixed Ollama provider compatibility (invoke() parameters)
 - Per-provider model configuration from config.yaml
 - Seamless operation when Anthropic credits exhausted
+- Installed dependencies: `langchain-ollama`, `langchain-anthropic`
 - **Total**: ~48 lines changed across 4 files
+
+**Feature 4: CLI Interface Consistency** ✅ COMPLETE (Commits: d47b6ea, 6848968)
+
+- Changed `snapshot` and `diff` commands to use positional args
+- Made snapshot name optional with auto-generated default
+- Consistent interface across all research commands
+- Auto-generated snapshot names: `snapshot-<workspace>-<ISO-timestamp>`
+- **Total**: ~26 lines changed in [curator/__main__.py](curator/__main__.py)
 
 **Previous Milestones**:
 
@@ -44,12 +53,13 @@ Branch: `feature/research-architecture`
 ## Recent Commits
 
 ```bash
+6848968 feat: Make snapshot name optional with auto-generated default
+d47b6ea refactor: Use positional args for snapshot and diff commands
+4da2d71 docs: Update context with adaptive search fallback integration
 5810da5 fix: Enable automatic LLM fallback in adaptive search
 ef4ba4d docs: Update context with LLM fallback implementation
 230fc5c docs: Add LLM fallback demo script
 57ba3b3 feat: Add LLM provider fallback chain for quota exhaustion
-46b9c4b docs: Update context with bug fix session details
-7cb205e fix: Resolve repo count discrepancy and add resume capability
 ```
 
 ## Current Status
@@ -58,11 +68,11 @@ ef4ba4d docs: Update context with LLM fallback implementation
 
 - **Branch**: `feature/research-architecture`
 - **Status**: ✅ Clean working directory (all committed)
-- **Latest commit**: Adaptive search fallback integration (5810da5)
+- **Latest commit**: Optional snapshot names (6848968)
 - **Phase 1 Progress**: ✅ 100% COMPLETE
 - **Phase 2 Progress**: ✅ 100% COMPLETE
 - **Phase 3 Progress**: ✅ 100% COMPLETE
-- **Total Lines Added**: ~2,367 lines (340 Phase 1 + 350 Phase 2 + 417 Phase 3 + 340 backend + 37 fixes + 835 fallback + 48 integration)
+- **Total Lines Added**: ~2,393 lines (340 Phase 1 + 350 Phase 2 + 417 Phase 3 + 340 backend + 37 fixes + 835 fallback + 48 integration + 26 CLI)
 
 ### What's Working
 
@@ -908,3 +918,157 @@ All linters passing: black ✓, ruff ✓, mypy ✓
 - **Config-driven flexibility**: Each provider can have its own model and settings
 - **Real-world usage**: Adaptive search now works without interruption when credits exhausted
 - **User experience**: No changes needed to user workflow, fallback happens automatically
+
+## CLI Interface Consistency Improvements (2025-10-13)
+
+### User Feedback
+
+User identified interface inconsistency:
+- Most commands use positional args: `curator research show python-async-2025`
+- But snapshot/diff used options: `curator research snapshot workspace --snapshot-name baseline`
+
+### Solution
+
+Standardized all research commands to use positional arguments for consistency.
+
+### Changes Made
+
+#### 1. snapshot command ([curator/__main__.py](curator/__main__.py) lines 1628-1669)
+
+**Before**:
+```bash
+curator research snapshot python-async-2025 --snapshot-name baseline
+```
+
+**After**:
+```bash
+# Named snapshot
+curator research snapshot python-async-2025 baseline
+
+# Optional: Auto-generated name
+curator research snapshot python-async-2025
+→ Creates: snapshot-python-async-2025-2025-10-13T18-30-45
+```
+
+Changes:
+- Removed `--snapshot-name` option
+- Added `snapshot_name` as optional positional argument (`required=False`)
+- Auto-generates timestamped name when omitted
+- Format: `snapshot-<workspace>-<ISO-timestamp>`
+- Type annotation: `Optional[str]` for Python 3.9 compatibility
+
+#### 2. diff command ([curator/__main__.py](curator/__main__.py) lines 2053-2072)
+
+**Before**:
+```bash
+curator research diff python-async --from baseline --to update
+```
+
+**After**:
+```bash
+curator research diff python-async baseline update
+```
+
+Changes:
+- Removed `--from` and `--to` options
+- Added `from_snapshot` and `to_snapshot` as positional arguments
+- More natural syntax: reads like English
+
+### Consistent Interface Pattern
+
+All research commands now follow: **`command workspace-name [resource-name]`**
+
+```bash
+# Workspace management
+curator research init <name> --query "..."
+curator research list
+curator research show <name>
+curator research delete <name>
+
+# Repository management
+curator research add <workspace> <repo>
+curator research collect <workspace>
+
+# Evaluation & snapshots (NOW CONSISTENT!)
+curator research snapshot <workspace> [snapshot-name]  # Optional!
+curator research diff <workspace> <from-snapshot> <to-snapshot>
+
+# Updates
+curator research refresh <workspace> [--sync|--discover|--all]
+```
+
+### Benefits
+
+✅ **Consistency** - All commands use same pattern for required arguments
+✅ **Convenience** - Less typing, no need for option flags
+✅ **Natural syntax** - Reads like English
+✅ **Flexibility** - Snapshot name optional with smart default
+✅ **Chronological tracking** - Auto-generated names sort naturally by time
+✅ **Semantic milestones** - Can still use custom names (baseline, v1.0, etc)
+
+### Auto-Generated Snapshot Names
+
+**Pattern**: `snapshot-<workspace>-<YYYY-MM-DDTHH-MM-SS>`
+
+**Examples**:
+- `snapshot-python-async-2025-2025-10-13T18-30-45`
+- `snapshot-web-frameworks-2025-10-13T19-15-22`
+
+**Advantages**:
+- Unique (timestamp precision to seconds)
+- Sortable (ISO 8601 format)
+- Informative (contains workspace name)
+- No naming overhead for quick iterations
+
+### Usage Patterns
+
+**Quick iteration workflow**:
+```bash
+curator research snapshot python-async  # Auto-name
+# Make changes...
+curator research snapshot python-async  # Auto-name
+# Compare using auto-generated names from output
+```
+
+**Milestone workflow**:
+```bash
+curator research snapshot python-async baseline
+curator research snapshot python-async v1.0
+curator research diff python-async baseline v1.0
+```
+
+### Files Modified
+
+- [curator/__main__.py](curator/__main__.py): +26 lines, -16 lines
+  - Lines 1628-1669: snapshot command with optional name
+  - Lines 2053-2072: diff command with positional args
+
+### Testing
+
+```bash
+$ curator research snapshot --help
+Usage: curator research snapshot [OPTIONS] NAME [SNAPSHOT_NAME]
+  SNAPSHOT_NAME: Optional name for this snapshot...
+
+$ curator research diff --help
+Usage: curator research diff [OPTIONS] NAME FROM_SNAPSHOT TO_SNAPSHOT
+  FROM_SNAPSHOT: Name of baseline snapshot
+  TO_SNAPSHOT: Name of comparison snapshot
+```
+
+All linters passing: black ✓, ruff ✓, mypy ✓
+
+### Technical Notes
+
+- Used `Optional[str]` instead of `str | None` for Python 3.9 compatibility
+- Black reformatting applied after Optional type change
+- Click's `required=False` makes argument optional in command signature
+- Default value generation happens at runtime in function body
+- Backward compatible: existing scripts with explicit names still work
+
+### Key Insights
+
+- **User feedback matters**: Interface inconsistencies are easy to miss during implementation
+- **Positional args are natural**: For required data, options add cognitive overhead
+- **Smart defaults improve UX**: Auto-generation removes naming burden for quick iterations
+- **ISO timestamps are practical**: Built-in sorting and uniqueness without collision risk
