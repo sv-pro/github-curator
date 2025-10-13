@@ -1627,9 +1627,7 @@ def research_collect(
 
 @research.command("snapshot")
 @click.argument("name")
-@click.option(
-    "--snapshot-name", "-n", required=True, help="Name for this snapshot (e.g., baseline)"
-)
+@click.argument("snapshot_name")
 @click.option("--config", "-c", default="config/curator.yaml", help="Configuration file path")
 @click.option(
     "--use-git-clone", is_flag=True, help="Clone repos locally instead of using GitHub API"
@@ -1639,6 +1637,8 @@ def research_snapshot(name: str, snapshot_name: str, config: str, use_git_clone:
 
     NAME: Research workspace name
 
+    SNAPSHOT_NAME: Name for this snapshot (e.g., baseline, update-2025-10)
+
     Evaluates all repositories in the workspace using the configured theme,
     then saves results as a timestamped JSON snapshot. Snapshots enable
     tracking how repositories evolve over time.
@@ -1646,10 +1646,10 @@ def research_snapshot(name: str, snapshot_name: str, config: str, use_git_clone:
     Examples:
 
         # Create baseline snapshot
-        curator research snapshot python-async-2025 --snapshot-name baseline
+        curator research snapshot python-async-2025 baseline
 
         # Create update snapshot
-        curator research snapshot python-async-2025 --snapshot-name update-2025-10
+        curator research snapshot python-async-2025 update-2025-10
     """
     import json
     from datetime import datetime
@@ -2052,19 +2052,23 @@ def research_refresh(
 
 @research.command("diff")
 @click.argument("name")
-@click.option("--from", "from_snapshot", required=True, help="Name of baseline snapshot")
-@click.option("--to", "to_snapshot", required=True, help="Name of comparison snapshot")
+@click.argument("from_snapshot")
+@click.argument("to_snapshot")
 def research_diff(name: str, from_snapshot: str, to_snapshot: str):
     """Compare two evaluation snapshots.
 
     NAME: Research workspace name
+
+    FROM_SNAPSHOT: Name of baseline snapshot
+
+    TO_SNAPSHOT: Name of comparison snapshot
 
     Compares two snapshots to identify changes in repository evaluations over time.
     Shows new repositories, removed repositories, and score changes for existing ones.
 
     Example:
 
-        curator research diff python-async --from baseline --to update
+        curator research diff python-async baseline update
     """
     try:
         import json
