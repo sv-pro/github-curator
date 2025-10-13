@@ -13,7 +13,7 @@ Branch: `feature/research-architecture`
 - Added `--resume` flag to `research collect` for interrupted operations
 - Enhanced user messaging for resume mode
 
-**Feature 2: LLM Provider Fallback Chain** ✅ COMPLETE (Commits: 57ba3b3, 230fc5c)
+**Feature 2: LLM Provider Fallback Chain** ✅ COMPLETE (Commits: 57ba3b3, 230fc5c, ef4ba4d)
 
 - Automatic fallback when Anthropic credit balance depleted
 - Support for Anthropic → OpenAI → Ollama chain
@@ -22,6 +22,15 @@ Branch: `feature/research-architecture`
 - Config-driven setup (enabled by default)
 - Comprehensive documentation and demo script
 - **Total**: ~835 lines added across 8 files
+
+**Feature 3: Adaptive Search Fallback Integration** ✅ COMPLETE (Commit: 5810da5)
+
+- Integrated LLM fallback into AdaptiveSearchStrategy
+- Automatic fallback during query generation (Anthropic → Ollama)
+- Fixed Ollama provider compatibility (invoke() parameters)
+- Per-provider model configuration from config.yaml
+- Seamless operation when Anthropic credits exhausted
+- **Total**: ~48 lines changed across 4 files
 
 **Previous Milestones**:
 
@@ -35,12 +44,12 @@ Branch: `feature/research-architecture`
 ## Recent Commits
 
 ```bash
+5810da5 fix: Enable automatic LLM fallback in adaptive search
+ef4ba4d docs: Update context with LLM fallback implementation
 230fc5c docs: Add LLM fallback demo script
 57ba3b3 feat: Add LLM provider fallback chain for quota exhaustion
 46b9c4b docs: Update context with bug fix session details
 7cb205e fix: Resolve repo count discrepancy and add resume capability
-170c598 docs: Update context with Phase 3 completion
-fe84891 feat: Complete Phase 3 - Research refresh and snapshot comparison
 ```
 
 ## Current Status
@@ -49,11 +58,11 @@ fe84891 feat: Complete Phase 3 - Research refresh and snapshot comparison
 
 - **Branch**: `feature/research-architecture`
 - **Status**: ✅ Clean working directory (all committed)
-- **Latest commit**: LLM fallback system (230fc5c)
+- **Latest commit**: Adaptive search fallback integration (5810da5)
 - **Phase 1 Progress**: ✅ 100% COMPLETE
 - **Phase 2 Progress**: ✅ 100% COMPLETE
 - **Phase 3 Progress**: ✅ 100% COMPLETE
-- **Total Lines Added**: ~2,319 lines (340 Phase 1 + 350 Phase 2 + 417 Phase 3 + 340 backend + 37 fixes + 835 fallback)
+- **Total Lines Added**: ~2,367 lines (340 Phase 1 + 350 Phase 2 + 417 Phase 3 + 340 backend + 37 fixes + 835 fallback + 48 integration)
 
 ### What's Working
 
@@ -768,3 +777,134 @@ All linters passing:
 - **Error detection is critical**: Must distinguish quota from auth/rate limit errors
 - **Config-driven is user-friendly**: Users don't need code changes to enable fallback
 - **Local Ollama as safety net**: Always available when all commercial APIs exhausted
+
+## Adaptive Search Fallback Integration (2025-10-13)
+
+### User Problem
+
+Adaptive search uses LLM to generate diverse search queries. When running `curator research collect`, the search would fail immediately if Anthropic credits were exhausted, blocking the entire workflow.
+
+### Solution
+
+Integrated the LLM provider fallback system into AdaptiveSearchStrategy so it automatically uses Ollama when Anthropic fails.
+
+### Changes Made
+
+#### 1. AdaptiveSearchStrategy ([curator/github/adaptive_search.py](curator/github/adaptive_search.py))
+
+Replaced direct Anthropic client with fallback-enabled provider:
+```python
+# Before:
+self.client = anthropic.Anthropic()
+response = self.client.messages.create(...)
+
+# After:
+self.llm_provider = create_llm_provider_from_config(config_path)
+response = self.llm_provider.complete(messages=[LLMMessage(...)])
+```
+
+#### 2. Factory Enhancements ([curator/llm/factory.py](curator/llm/factory.py))
+
+Pass model and provider-specific settings to fallback providers:
+- Extract `_models_config` and `_providers_config` from kwargs
+- Get model for each fallback provider from config.yaml
+- Pass provider-specific settings (e.g., Ollama base_url)
+
+Lines changed:
+- Lines 64-66: Extract internal configs before primary creation
+- Lines 117-128: Get fallback model and settings per provider
+
+#### 3. Ollama Compatibility ([curator/llm/langchain_provider.py](curator/llm/langchain_provider.py))
+
+Fixed Ollama's different invoke() API:
+```python
+# Ollama doesn't accept parameters in invoke()
+if self.provider == "ollama":
+    response = self.llm.invoke(lc_messages)
+else:
+    # Anthropic, OpenAI, Google accept parameters
+    response = self.llm.invoke(lc_messages, max_tokens=..., temperature=...)
+```
+
+Lines changed:
+- Lines 192-204: Provider-specific invoke logic
+
+#### 4. Configuration ([config/curator.yaml](config/curator.yaml))
+
+- Updated Ollama model: `llama3.3` → `llama3:latest` (matches installed model)
+- Commented out OpenAI fallback (no API key available)
+- Fallback chain: Anthropic → Ollama
+
+### Behavior
+
+**Before**: Immediate failure when Anthropic credits exhausted
+```
+🔎 Searching GitHub...
+Iteration 1/5: 0 repos found
+  → Generating 4 broad queries...
+❌ Error: BadRequestError: Your credit balance is too low...
+Aborted!
+```
+
+**After**: Automatic fallback to Ollama, operation continues
+```
+🔎 Searching GitHub...
+Provider anthropic failed: Credit/quota exceeded... Trying next provider in chain...
+🔄 Adaptive search enabled (target: 30 repos)
+Iteration 1/5: 0 repos found
+  → Generating 4 broad queries...
+    1. 'python testing frameworks'
+    2. 'unittest framework python'
+    ...
+```
+
+### Technical Details
+
+**Provider parameter differences**:
+- Anthropic/OpenAI/Google: Support `max_tokens`, `temperature` in `invoke()`
+- Ollama: Doesn't support parameters in `invoke()`, must configure at construction
+
+**Model configuration flow**:
+1. `create_llm_provider_from_config()` reads config.yaml
+2. Extracts models dict: `{anthropic: claude-..., ollama: llama3:latest}`
+3. Passes to `create_llm_provider()` via internal `_models_config` key
+4. For each fallback provider, gets its specific model from dict
+5. Creates provider with correct model and settings
+
+**Error propagation**:
+- Anthropic fails → `LLMQuotaExceededError` raised
+- FallbackLLMProvider catches it → marks Anthropic as exhausted
+- Tries next provider (Ollama) → success
+- Operation continues seamlessly
+
+### Files Modified
+
+- [curator/github/adaptive_search.py](curator/github/adaptive_search.py): +10 lines, -8 lines
+- [curator/llm/factory.py](curator/llm/factory.py): +25 lines, -5 lines
+- [curator/llm/langchain_provider.py](curator/llm/langchain_provider.py): +15 lines, -6 lines
+- [config/curator.yaml](config/curator.yaml): +2 lines, -2 lines
+
+**Total**: 48 lines changed across 4 files
+
+### Testing
+
+Verified end-to-end:
+```bash
+$ curator research collect test-fallback --limit 3
+🔍 Collecting repositories for: test-fallback
+Provider anthropic failed: Credit/quota exceeded... Trying next provider...
+Iteration 1/5: 0 repos found
+  → Generating 4 broad queries...
+  ✓ Found: pytest-dev/pytest (⭐ 13161, license: MIT License)
+  ...
+```
+
+All linters passing: black ✓, ruff ✓, mypy ✓
+
+### Key Insights from This Session
+
+- **Seamless integration**: Fallback system works transparently in existing code
+- **Provider API differences matter**: Ollama's LangChain wrapper has different invoke() signature
+- **Config-driven flexibility**: Each provider can have its own model and settings
+- **Real-world usage**: Adaptive search now works without interruption when credits exhausted
+- **User experience**: No changes needed to user workflow, fallback happens automatically
