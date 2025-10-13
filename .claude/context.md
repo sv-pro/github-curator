@@ -1,20 +1,19 @@
 # Claude Code Context
 
-Last updated: 2025-10-11 (current session)
+Last updated: 2025-10-13 (current session)
 Branch: `feature/research-architecture`
 
 ## Session Summary
 
 ### What Was Accomplished This Session
 
-**Milestone 6**: Phase 3 - Refresh & Comparison ✅ COMPLETE
+**Bug Fixes**: User Experience Improvements ✅ COMPLETE
 
-- Added refresh and diff commands (~417 lines)
-- `refresh` - Update workspace with latest data (sync/discover/all modes)
-- `diff` - Compare snapshots with detailed change analysis
-- Integration with RepoTracker, AdaptiveSearchStrategy, and snapshot system
-- All linters passing (black, ruff, mypy)
-- Commit: fe84891
+- Fixed repo count discrepancy between `list` and `show` commands
+- Added `--resume` flag to `research collect` for interrupted operations
+- Enhanced user messaging for resume mode
+- All linters passing (black, ruff, mypy, pre-commit hooks)
+- Commit: 7cb205e
 
 **Previous Milestones**:
 
@@ -23,15 +22,16 @@ Branch: `feature/research-architecture`
 3. Research Module Foundation ✅ (40243f4)
 4. Phase 1 - Research CLI Commands ✅ (72679e8)
 5. Phase 2 - Evaluation & Snapshots ✅ (858a32a)
+6. Phase 3 - Refresh & Comparison ✅ (fe84891)
 
 ## Recent Commits
 
 ```bash
+7cb205e fix: Resolve repo count discrepancy and add resume capability
 fe84891 feat: Complete Phase 3 - Research refresh and snapshot comparison
 91a5f43 docs: Save comprehensive session context
 f442777 docs: Update context with Phase 2 completion
 858a32a feat: Complete Phase 2 - Research evaluation and snapshots
-a40eed4 docs: Update context with Phase 1 completion
 ```
 
 ## Current Status
@@ -40,11 +40,11 @@ a40eed4 docs: Update context with Phase 1 completion
 
 - **Branch**: `feature/research-architecture`
 - **Status**: ✅ Clean working directory (all committed)
-- **Latest commit**: Phase 3 refresh & diff (fe84891)
+- **Latest commit**: Bug fixes for UX (7cb205e)
 - **Phase 1 Progress**: ✅ 100% COMPLETE
 - **Phase 2 Progress**: ✅ 100% COMPLETE
 - **Phase 3 Progress**: ✅ 100% COMPLETE
-- **Total Lines Added**: ~1,447 lines (340 Phase 1 + 350 Phase 2 + 417 Phase 3 + 340 backend)
+- **Total Lines Added**: ~1,484 lines (340 Phase 1 + 350 Phase 2 + 417 Phase 3 + 340 backend + 37 fixes)
 
 ### What's Working
 
@@ -436,7 +436,7 @@ The time-series research workflow is now fully functional.
 
 Or proceed with **Phase 5: Command Consolidation** to deprecate old commands.
 
-### Key Insights from Session
+### Key Insights from Previous Sessions
 
 - **Refresh command** enables continuous monitoring of research topics
 - **Diff command** provides rich trend analysis for repository evolution
@@ -444,3 +444,75 @@ Or proceed with **Phase 5: Command Consolidation** to deprecate old commands.
 - Pre-commit hooks catch issues before commit (ruff auto-fix, mypy checks)
 - Comprehensive progress reporting improves UX during long operations
 - Reusing existing components (RepoTracker, AdaptiveSearchStrategy) reduces code duplication
+
+## Current Session Details (2025-10-13)
+
+### Bug Fixes Implemented
+
+#### Issue 1: Repository Count Discrepancy
+
+User reported that `list` and `show` commands displayed different repo counts (e.g., "found" vs "fetched").
+
+Root cause:
+
+- `list` command ([curator/**main**.py:1292](curator/__main__.py#L1292)) used `ResearchManager._get_research_info()` which correctly traverses `repos/org/repo` structure
+- `show` command ([curator/**main**.py:1354-1356](curator/__main__.py#L1354-L1356)) counted only top-level directories (org dirs)
+
+Fix:
+
+- Updated `show` command to use same counting logic as `list`
+- Both now correctly count repos at `org/repo` depth level
+- Lines changed: [curator/**main**.py:1353-1360](curator/__main__.py#L1353-L1360)
+
+#### Issue 2: Interrupted Collection Operations
+
+User wanted ability to resume interrupted `collect` operations. When interrupted, the command would report "Found X repositories" from search, but only some would be cloned.
+
+Solution:
+
+- Added `--resume` flag to `research collect` command
+- Resume mode reruns the search and skips already-cloned repos
+- Enhanced user messaging to distinguish resume mode from normal mode
+- Provides clear feedback about what's being skipped vs. retried
+
+Changes:
+
+- [curator/**main**.py:1468](curator/__main__.py#L1468): Added `--resume` flag
+- [curator/**main**.py:1486-1488](curator/__main__.py#L1486-L1488): Updated docstring with examples
+- [curator/**main**.py:1514-1581](curator/__main__.py#L1514-L1581): Resume mode logic and messaging
+- [curator/**main**.py:1604-1613](curator/__main__.py#L1604-L1613): Enhanced completion messages
+
+Usage:
+
+```bash
+# Initial collection (interrupted)
+curator research collect python-async-2025
+# Found 50 repositories
+# [cloning happens, gets interrupted at 20/50]
+
+# Resume to finish cloning remaining repos
+curator research collect python-async-2025 --resume
+# ✓ 20 repositories already cloned (skipping)
+# 📦 Adding 30 new repositories...
+```
+
+### Testing
+
+- Verified counting logic consistency between commands
+- All linters passing: black ✓, ruff ✓, mypy ✓
+- Pre-commit hooks passing ✓
+- Help text displays resume option correctly ✓
+
+### Files Modified
+
+- [curator/**main**.py](curator/__main__.py): +37 lines, -6 lines
+  - Fixed repo counting in `show` command
+  - Added `--resume` flag and logic to `collect` command
+  - Enhanced user messaging for better UX
+
+### Key Insights from This Session
+
+- **Consistency matters**: Small differences in counting logic create user confusion
+- **Resume capability is essential**: Long-running operations (cloning 50+ repos) often get interrupted
+- **User-reported issues reveal real usage patterns**: These fixes came from actual user experience
+- **Clear messaging improves UX**: Different messages for resume vs. normal mode help users understand what's happening
