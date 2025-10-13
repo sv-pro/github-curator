@@ -18,18 +18,23 @@ Build an intelligent GitHub repository curator that demonstrates IntentHub princ
 - **Reflection**: Pattern analysis and improvement suggestions
 - **Report Generation**: Markdown, JSON, and HTML trace viewer
 - **Prefect Pipeline** (Phase 1): Declarative tasks with caching (83x speedup)
+- **Research Workspace System**: Time-series tracking (Phases 1-3, 9 commands)
+- **LLM Provider Fallback**: Automatic Anthropic → OpenAI → Ollama chain
+- **Smart Repo Fetcher**: Multi-stage analysis (50-70% cost reduction)
+- **Automated Testing**: 40+ tests, CI/CD, phase gates (70%+ coverage)
 
 ### ⚠️ Partially Implemented / Missing
-- **CLI Commands**: `mark` and `collect` commands were implemented but removed
+- **Cost Monitoring**: No visibility into API costs or token usage
 - **Knowledge Base**: File-based storage only, no semantic search
-- **LLM Provider**: Locked to Anthropic Claude
-- **Error Detection**: Improved but could be better
 - **Documentation**: Scattered across multiple files
+- **Snapshot Design**: Several open questions need resolution
 
 ### 🚧 Architecture Decisions Made
 - **Declarative Pipeline**: Use Prefect for task orchestration ([details](features/declarative-pipeline.md))
 - **Hybrid Storage**: File + Vector DB + Graph DB ([details](features/hybrid-storage.md))
 - **LLM Abstraction**: Use LangChain for multi-provider support ([details](features/llm-abstraction.md))
+- **Research Workspaces**: Self-contained time-series tracking system ([details](RESEARCH_ARCHITECTURE_REDESIGN.md))
+- **LLM Fallback**: Automatic provider chain (Anthropic → OpenAI → Ollama) ([details](LLM_FALLBACK.md))
 
 ---
 
@@ -128,14 +133,56 @@ Build an intelligent GitHub repository curator that demonstrates IntentHub princ
 
 **See**: [TESTING.md](../TESTING.md), [TEST_QUICK_REFERENCE.md](../TEST_QUICK_REFERENCE.md), [TESTING_SUITE_SUMMARY.md](../TESTING_SUITE_SUMMARY.md)
 
-#### Phase 3: Cost Tracking + Semantic Search (Week 3)
-**Focus**: Add cost awareness and vector database for intelligent search
+#### Phase 2.7: Research Architecture (Week 2-3) ✅ **COMPLETE**
+**Focus**: Time-series research workflow with workspace management
 
-**Cost Tracking**:
-- [ ] Create cost calculator with provider pricing
-- [ ] Track token usage per command
-- [ ] Display cost summary after commands
-- [ ] Add cost comparison tips
+**Implementation** (3 phases, 9 commands, ~2,416 lines):
+- [x] Phase 1: Core workspace infrastructure (init, list, show, add, delete)
+- [x] Phase 2: Evaluation & snapshots (collect, snapshot)
+- [x] Phase 3: Updates & comparison (refresh, diff)
+- [x] LLM fallback integration (~835 lines)
+- [x] Bug fixes & UX improvements (count consistency, resume mode)
+- [x] CLI consistency (positional args, auto-generated snapshot names)
+
+**Deliverables**: ✅
+- Complete time-series research workflow
+- 9 research commands fully operational
+- Self-contained workspace system (`~/.github-curator/research/<name>/`)
+- Snapshot evaluation and comparison
+- Seamless LLM fallback across all operations
+- Resume capability for interrupted operations
+
+**See**: [RESEARCH_ARCHITECTURE_REDESIGN.md](RESEARCH_ARCHITECTURE_REDESIGN.md), [LLM_FALLBACK.md](LLM_FALLBACK.md), [.claude/context.md](../.claude/context.md)
+
+#### Phase 3: Cost Monitoring (Week 3) 🔥 **TOP PRIORITY**
+**Focus**: Comprehensive cost visibility and tracking across all LLM operations
+
+**Cost Monitoring System**:
+- [ ] Create `CostTracker` class with provider pricing tables
+- [ ] Track token usage per LLM call (input/output tokens)
+- [ ] Integrate into `LangChainProvider` for automatic tracking
+- [ ] Display real-time costs during operations
+- [ ] Save cost data in research workspace snapshots
+- [ ] Add cost comparison between snapshots
+- [ ] Provider cost breakdowns (Anthropic vs Ollama vs OpenAI)
+- [ ] Cost estimation before expensive operations
+- [ ] Budget warnings and limits
+
+**Cost Visualization**:
+- [ ] Display cost summary after each command
+- [ ] Show cumulative costs per research workspace
+- [ ] Cost trends over time (per snapshot)
+- [ ] Provider fallback cost analysis
+- [ ] Cost savings from Smart Fetcher (already estimated, needs actual tracking)
+
+**Deliverables**:
+- Real-time cost tracking for all LLM operations
+- Cost summaries in all research commands
+- Historical cost tracking in snapshots
+- Budget awareness and optimization tips
+
+#### Phase 3.5: Semantic Search (Week 4)
+**Focus**: Vector database for intelligent search
 
 **Semantic Search**:
 - [ ] Integrate ChromaDB for embeddings
@@ -144,10 +191,35 @@ Build an intelligent GitHub repository curator that demonstrates IntentHub princ
 - [ ] Migrate existing knowledge base to vector store
 
 **Deliverables**:
-- Cost display after each command (curate/mark/collect)
 - Semantic search like "find repos similar to FastAPI"
 
-#### Phase 4: Graph Relationships (Week 4)
+#### Phase 3.9: Research Architecture - Snapshot Design Decisions 🎯 **BLOCKED - NEEDS DECISIONS**
+**Focus**: Resolve open design questions before continuing snapshot development
+
+**Open Design Questions** (documented in [SNAPSHOT_DESIGN_QUESTIONS.md](SNAPSHOT_DESIGN_QUESTIONS.md)):
+
+1. **Snapshot Artifacts**: Should we generate semantic delta artifacts in addition to full state?
+   - Options: Full state only (current), auto-generate deltas, optional flag, on-demand command
+   - Impact: Richer semantics vs complexity, requires LLM analysis of changes
+
+2. **Git Pull Strategy**: Should snapshot auto-pull repos before evaluation?
+   - Options: Always pull, never pull (current), --pull flag, auto-pull if stale, interactive prompt
+   - Impact: Freshness vs performance vs user control vs transparency
+
+3. **LLM Metadata Tracking**: How to track provider/model used for reproducibility?
+   - Options: Snapshot-level aggregate, per-evaluation granular, both levels, only on fallback
+   - Impact: Traceability vs complexity vs comparability
+
+4. **Snapshot Comparability**: How to handle comparing snapshots from different models?
+   - Options: Warn on mismatch, normalize scores, re-evaluate baseline, accept approximate
+   - Impact: Accuracy vs cost vs user awareness
+
+**Deliverables**:
+- Design decisions documented
+- Implementation plan for chosen approaches
+- Update CLAUDE.md with architectural decisions
+
+#### Phase 4: Graph Relationships (Week 5)
 **Focus**: Add graph database for pattern discovery
 
 - [ ] Integrate NetworkX for relationship tracking
@@ -193,18 +265,36 @@ Build an intelligent GitHub repository curator that demonstrates IntentHub princ
 | `setup` | ✅ Implemented | P0 | Environment validation |
 | `validate-config` | ✅ Implemented | P2 | Config validation |
 
+### Research Commands (Time-Series Tracking)
+
+| Command | Status | Priority | Description |
+|---------|--------|----------|-------------|
+| `research init` | ✅ Implemented | P0 | Create research workspace |
+| `research list` | ✅ Implemented | P0 | List all workspaces |
+| `research show` | ✅ Implemented | P0 | Display workspace details |
+| `research add` | ✅ Implemented | P1 | Add single repository |
+| `research delete` | ✅ Implemented | P2 | Remove workspace |
+| `research collect` | ✅ Implemented | P0 | Search and batch-add repos |
+| `research snapshot` | ✅ Implemented | P0 | Evaluate and save snapshot |
+| `research refresh` | ✅ Implemented | P0 | Update repos (sync/discover) |
+| `research diff` | ✅ Implemented | P0 | Compare snapshots |
+| `research report` | 📋 Planned | P1 | Generate markdown reports |
+
 ### Infrastructure Features
 
 | Feature | Status | Priority | Details |
 |---------|--------|----------|---------|
 | Declarative Pipeline | 🚧 Phase 1 Done | P0 | → [Pipeline Plan](features/declarative-pipeline.md) |
 | Multi-Provider LLM | ✅ Implemented | P0 | Anthropic/OpenAI/Google/Ollama → [LLM Providers](LLM_PROVIDERS.md) |
+| **LLM Provider Fallback** | ✅ **Implemented** | **P0** | **Automatic Anthropic→OpenAI→Ollama chain** → [LLM Fallback](LLM_FALLBACK.md) |
 | Error Detection | ✅ Implemented | P0 | Structured error hierarchy with solutions |
 | **Smart Repo Fetcher** | ✅ **Phase 2 Done** | **P0** | **50-70% cost savings, 3-5x speedup** → [Smart Fetcher](features/smart-repo-fetcher.md) |
 | **Automated Testing** | ✅ **Phase 2.5 Done** | **P0** | **40+ tests, CI/CD, phase gates** → [TESTING.md](../TESTING.md) |
-| Cost Tracking | 📋 Phase 3 | P1 | Show API costs per command → [Cost Tracking](features/cost-tracking.md) |
+| **Research Workspaces** | ✅ **Phase 2.7 Done** | **P0** | **Time-series tracking, 9 commands** → [Research Architecture](RESEARCH_ARCHITECTURE_REDESIGN.md) |
+| **Cost Monitoring** | 🔥 **Phase 3 Priority** | **P0** | **Real-time tracking, budget awareness** → [Cost Tracking](features/cost-tracking.md) |
+| Snapshot Design | 🎯 **Blocked** | **P0** | **4 open questions need decisions** → [Snapshot Questions](SNAPSHOT_DESIGN_QUESTIONS.md) |
 | Hybrid Storage | 📋 Phase 3-5 | P1 | → [Storage Plan](features/hybrid-storage.md) |
-| Vector Search | 📋 Phase 3 | P1 | Part of hybrid storage |
+| Vector Search | 📋 Phase 3.5 | P1 | Part of hybrid storage |
 | Graph DB | 📋 Phase 4 | P2 | Part of hybrid storage |
 | RAG Analysis | 📋 Phase 6 | P3 | Future enhancement |
 
@@ -225,22 +315,40 @@ Build an intelligent GitHub repository curator that demonstrates IntentHub princ
 
 ### Recent Architectural Decisions
 
-1. **Prefect for Pipeline** (Oct 2025)
+1. **Research Workspace System** (Oct 13, 2025) ✅
+   - **Decision**: Implement self-contained research workspaces for time-series tracking
+   - **Rationale**: Enable topic evolution tracking, periodic updates, and comparison
+   - **Result**: 9 commands, ~2,416 lines, complete workflow
+   - **Docs**: [RESEARCH_ARCHITECTURE_REDESIGN.md](RESEARCH_ARCHITECTURE_REDESIGN.md)
+
+2. **LLM Provider Fallback** (Oct 13, 2025) ✅
+   - **Decision**: Automatic fallback chain (Anthropic → OpenAI → Ollama)
+   - **Rationale**: Prevent workflow interruption when credits exhausted
+   - **Result**: Seamless operation, ~835 lines, enabled by default
+   - **Docs**: [LLM_FALLBACK.md](LLM_FALLBACK.md)
+
+3. **Cost Monitoring Priority** (Oct 13, 2025) 🔥
+   - **Decision**: Make cost monitoring the top priority for Phase 3
+   - **Rationale**: Need visibility into API costs, especially with fallback system
+   - **Next**: Implement comprehensive cost tracking system
+   - **Docs**: [features/cost-tracking.md](features/cost-tracking.md)
+
+4. **Prefect for Pipeline** (Oct 2025)
    - **Decision**: Use Prefect instead of custom build system
    - **Rationale**: Production-ready, built-in caching, parallel execution
    - **Result**: 83x speedup on cached runs
    - **Docs**: [PHASE1_COMPLETE.md](PHASE1_COMPLETE.md)
 
-2. **Hybrid Storage** (Oct 2025)
+5. **Hybrid Storage** (Oct 2025)
    - **Decision**: File cache + ChromaDB + NetworkX
    - **Rationale**: Balance simplicity, performance, and capabilities
-   - **Next**: Implementation in Phase 2-3
+   - **Next**: Implementation in Phase 3.5-5
    - **Docs**: [features/hybrid-storage.md](features/hybrid-storage.md)
 
-3. **LangChain over LiteLLM** (Oct 2025)
+6. **LangChain over LiteLLM** (Oct 2025)
    - **Decision**: Use LangChain for LLM abstraction
    - **Rationale**: Unified ecosystem (LLM + embeddings + vector DB)
-   - **Next**: Implementation in Phase 1-2
+   - **Status**: ✅ Implemented with multi-provider support
    - **Docs**: [features/llm-abstraction.md](features/llm-abstraction.md)
 
 ---
@@ -302,6 +410,26 @@ curator --help
 
 ## Questions & Decisions Needed
 
+### 🚨 Critical Decisions Required (Blocking Progress)
+
+#### Snapshot Design Questions
+**Status**: Blocking Phase 3.9 and future snapshot features
+**Document**: [SNAPSHOT_DESIGN_QUESTIONS.md](SNAPSHOT_DESIGN_QUESTIONS.md)
+
+1. **Snapshot Artifacts**: Should we generate semantic delta artifacts?
+   - [ ] Decision needed: Full state only vs deltas vs optional vs on-demand
+
+2. **Git Pull Strategy**: Should snapshot auto-pull repos?
+   - [ ] Decision needed: Always vs never vs --pull flag vs smart default vs prompt
+
+3. **LLM Metadata Tracking**: How to track provider/model info?
+   - [ ] Decision needed: Snapshot-level vs per-evaluation vs both vs only-on-fallback
+
+4. **Snapshot Comparability**: How to handle different LLM providers?
+   - [ ] Decision needed: Warn vs normalize vs re-evaluate vs accept-approximate
+
+**Impact**: Affects reproducibility, cost tracking, and comparison accuracy
+
 ### Open Questions
 1. **Deployment**: Self-hosted vs. cloud service?
 2. **Pricing**: Free tier limits for embeddings/LLM?
@@ -309,10 +437,14 @@ curator --help
 4. **Data**: Share curated lists publicly?
 
 ### Next Decision Points
-- [ ] **Week 1**: Choose Option A or B
-- [ ] **Week 2**: Embedding provider (OpenAI vs. open source)
-- [ ] **Week 3**: Graph DB (NetworkX vs. Neo4j)
-- [ ] **Week 4**: RAG implementation strategy
+- [x] **Phase 2**: Smart fetcher implementation ✅ Complete
+- [x] **Phase 2.5**: Testing infrastructure ✅ Complete
+- [x] **Phase 2.7**: Research architecture ✅ Complete
+- [ ] **Phase 3**: Cost monitoring implementation (TOP PRIORITY)
+- [ ] **Phase 3.9**: Snapshot design decisions (BLOCKED - needs user input)
+- [ ] **Phase 3.5**: Embedding provider (OpenAI vs. open source)
+- [ ] **Phase 4**: Graph DB (NetworkX vs. Neo4j)
+- [ ] **Phase 6**: RAG implementation strategy
 
 ---
 
@@ -336,6 +468,8 @@ curator --help
 
 ---
 
-**Last Updated**: October 10, 2025
-**Status**: Phase 1 Complete, Phase 2 (Smart Repo Fetcher) is Highest Priority
-**Next Milestone**: Implement Smart Repo Fetcher for 50-70% cost savings and 3-5x speedup
+**Last Updated**: October 13, 2025
+**Current Phase**: Phase 3 - Cost Monitoring (TOP PRIORITY)
+**Status**: Phases 1, 2, 2.5, and 2.7 Complete
+**Next Milestone**: Implement comprehensive cost monitoring system with real-time tracking
+**Blocked**: Phase 3.9 snapshot design decisions need user input

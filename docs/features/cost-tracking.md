@@ -1,30 +1,62 @@
 # Feature: Cost Awareness & Tracking
 
-**Status**: 📋 Planned
-**Priority**: P1
-**Estimated Effort**: 1-2 days
+**Status**: 🔥 **TOP PRIORITY** - Phase 3
+**Priority**: P0 (Critical)
+**Estimated Effort**: 2-3 days
+**Updated**: October 13, 2025
 
 ## Overview
 
-Add cost tracking to show users how much of their API budget was consumed by each command (`curate`, `mark`, `collect`). This helps users:
+Add **comprehensive cost tracking** to show users how much of their API budget was consumed by each command. With the new **LLM provider fallback system**, cost visibility is critical for understanding which providers are being used and their associated costs.
+
+This feature helps users:
 - Monitor spending in real-time
+- Understand fallback behavior and costs
 - Choose cost-effective providers/models
 - Optimize their usage patterns
 - Avoid surprise bills
+- Track research workspace costs over time
+
+## Context & Motivation
+
+**Why This Is Now Top Priority**:
+
+1. **LLM Fallback System**: With automatic fallback (Anthropic → OpenAI → Ollama), users need to know which providers are actually being used and what they cost
+2. **Research Workspaces**: Snapshot operations can evaluate 50+ repos, making cost awareness critical
+3. **Smart Fetcher**: We estimate 50-70% savings, but need **actual tracking** to verify
+4. **No Current Visibility**: Users have zero insight into API costs right now
 
 ## Requirements
 
-### Phase 1: Basic Cost Display (Current Plan)
-- Track token usage per command execution
-- Calculate estimated cost based on provider pricing
-- Display cost summary after command completion
-- Support all providers (Anthropic, OpenAI, Google, Ollama)
+### Phase 3.1: Real-Time Cost Tracking (TOP PRIORITY)
+- [x] Create `CostTracker` class with provider pricing tables
+- [ ] Track token usage per LLM call (input/output tokens)
+- [ ] Integrate into `LangChainProvider` for automatic tracking
+- [ ] Track provider information (which provider/model was used)
+- [ ] Display real-time costs during long operations
+- [ ] Support all providers (Anthropic, OpenAI, Google, Ollama)
+- [ ] Display cost summary after command completion
 
-### Phase 2: Advanced Features (Future)
-- Cost budgets and alerts
-- Historical cost tracking
-- Cost breakdown by operation (intent structuring, evaluation, etc.)
-- Export cost reports
+### Phase 3.2: Research Workspace Integration
+- [ ] Save cost data in research workspace snapshots
+- [ ] Add cost comparison between snapshots
+- [ ] Track cumulative costs per workspace
+- [ ] Provider cost breakdowns in snapshot metadata
+- [ ] Cost trends over time (per snapshot)
+- [ ] Verify Smart Fetcher actual cost savings
+
+### Phase 3.3: Budget Awareness
+- [ ] Cost estimation before expensive operations
+- [ ] Budget warnings when approaching limits
+- [ ] Configuration for cost alerts
+- [ ] Cost optimization tips based on usage
+
+### Phase 4: Advanced Features (Future)
+- [ ] Historical cost tracking across all operations
+- [ ] Cost breakdown by operation type
+- [ ] Export cost reports (CSV, JSON)
+- [ ] Cost vs. quality analysis
+- [ ] Automatic cost optimization suggestions
 
 ## Design
 
@@ -191,7 +223,110 @@ After each command, show a cost summary:
 💡 Tip: Use 'gpt-4o-mini' to reduce costs by ~90%
 ```
 
-### 4. Command Updates
+### 4. Snapshot Integration (Phase 3.2)
+
+Add cost metadata to research workspace snapshots:
+
+```python
+# Enhanced snapshot structure
+{
+  "name": "baseline",
+  "timestamp": "2025-10-13T18:30:45",
+  "workspace": "python-async-2025",
+  "theme": "python async frameworks",
+  "intent": { /* structured evaluation dimensions */ },
+  "evaluations": [ /* ... */ ],
+  "statistics": { /* ... */ },
+
+  # NEW: Cost metadata
+  "cost_metadata": {
+    "total_cost_usd": 1.89,
+    "total_input_tokens": 125430,
+    "total_output_tokens": 34221,
+    "total_tokens": 159651,
+    "total_llm_calls": 28,
+
+    # Provider breakdown
+    "providers": {
+      "anthropic": {
+        "model": "claude-sonnet-4-5-20250929",
+        "calls": 25,
+        "input_tokens": 120000,
+        "output_tokens": 30000,
+        "cost_usd": 1.77
+      },
+      "ollama": {
+        "model": "llama3:latest",
+        "calls": 3,
+        "input_tokens": 5430,
+        "output_tokens": 4221,
+        "cost_usd": 0.00
+      }
+    },
+
+    # Operation breakdown
+    "operations": {
+      "intent_structuring": {
+        "provider": "ollama",
+        "cost_usd": 0.00,
+        "tokens": 2500
+      },
+      "evaluations": {
+        "provider": "anthropic",
+        "cost_usd": 1.77,
+        "tokens": 150000,
+        "per_repo_avg": 0.071
+      }
+    },
+
+    # Fallback tracking
+    "fallback_occurred": true,
+    "fallback_reason": "Anthropic credit exhaustion",
+    "original_provider": "anthropic",
+    "fallback_at_evaluation": 25
+  },
+
+  # NEW: LLM metadata (addresses snapshot design question #3)
+  "llm_metadata": {
+    "primary_provider": "anthropic",
+    "fallback_used": true,
+    "providers_used": ["anthropic", "ollama"],
+    "intent_structurer": {
+      "provider": "ollama",
+      "model": "llama3:latest"
+    },
+    "evaluations_by_provider": {
+      "anthropic": ["owner/repo1", "owner/repo2", ...],
+      "ollama": ["owner/repo26", "owner/repo27", ...]
+    }
+  }
+}
+```
+
+### 5. Snapshot Comparison with Cost Analysis
+
+Enhance `research diff` to show cost trends:
+
+```bash
+$ curator research diff python-async baseline update
+
+📊 Snapshot Comparison: baseline → update
+
+# ... existing diff output ...
+
+💰 Cost Analysis:
+   baseline: $1.89 (28 calls, anthropic/ollama)
+   update:   $0.15 (30 calls, ollama only)
+
+   💡 Cost savings: $1.74 (-92%)
+   Reason: Switched to local Ollama model
+
+   Provider breakdown:
+   baseline: anthropic (89%), ollama (11%)
+   update:   ollama (100%)
+```
+
+### 6. Command Updates
 
 Update all commands to use `CostTracker`:
 
@@ -243,35 +378,91 @@ def _display_cost_summary(tracker: CostTracker):
 
 ## Implementation Plan
 
-### Step 1: Create Cost Calculator Module
+### Phase 3.1: Real-Time Cost Tracking (Days 1-2)
+
+#### Step 1: Create Cost Calculator Module
 - [ ] Create `curator/cost/__init__.py`
-- [ ] Create `curator/cost/calculator.py` with pricing data
-- [ ] Add `CostTracker` class
-- [ ] Add pricing update mechanism (for future maintenance)
+- [ ] Create `curator/cost/calculator.py` with:
+  - [ ] `ProviderPricing` dataclass
+  - [ ] `PROVIDER_PRICING` dictionary (current pricing tables)
+  - [ ] `CostTracker` class with `add_call()` and `get_summary()`
+  - [ ] Provider/model lookup functions
+- [ ] Add unit tests for cost calculations
 
-### Step 2: Update LLM Providers
-- [ ] Update `BaseLLMProvider` interface to accept `cost_tracker`
-- [ ] Update all provider implementations (Anthropic, OpenAI, etc.)
-- [ ] Ensure token counts are correctly extracted from responses
+#### Step 2: Update LLM Providers
+- [ ] Update `BaseLLMProvider.complete()` interface to accept `cost_tracker`
+- [ ] Update `LangChainProvider` implementation:
+  - [ ] Extract token counts from LangChain response
+  - [ ] Call `cost_tracker.add_call()` after each completion
+  - [ ] Handle different response formats per provider
+- [ ] Update `FallbackLLMProvider`:
+  - [ ] Pass cost_tracker through to wrapped providers
+  - [ ] Track which provider was actually used
+- [ ] Test token extraction with all providers
 
-### Step 3: Update CLI Commands
+#### Step 3: Update CLI Commands (Core)
 - [ ] Add `_display_cost_summary()` helper function
 - [ ] Update `curate` command to use `CostTracker`
 - [ ] Update `mark` command to use `CostTracker`
 - [ ] Update `collect` command to use `CostTracker`
 
-### Step 4: Testing
+#### Step 4: Update Research Commands
+- [ ] Update `research collect` command
+- [ ] Update `research snapshot` command (CRITICAL)
+- [ ] Display cost after each operation
+- [ ] Show cumulative workspace costs
+
+### Phase 3.2: Research Workspace Integration (Day 3)
+
+#### Step 5: Snapshot Cost Metadata
+- [ ] Extend snapshot JSON structure:
+  - [ ] Add `cost_metadata` section
+  - [ ] Add `llm_metadata` section (addresses design question #3)
+  - [ ] Track provider breakdowns
+  - [ ] Track operation-level costs
+  - [ ] Track fallback information
+- [ ] Update `research snapshot` to save cost data
+- [ ] Update `ResearchConfig` to track cumulative workspace costs
+
+#### Step 6: Enhanced Snapshot Comparison
+- [ ] Update `research diff` command:
+  - [ ] Add cost comparison section
+  - [ ] Show cost trends and savings
+  - [ ] Display provider distribution changes
+  - [ ] Warn on provider mismatch (addresses design question #4)
+- [ ] Create cost trend visualization helper
+
+#### Step 7: Smart Fetcher Cost Verification
+- [ ] Add cost tracking to `SmartRepoFetcher`
+- [ ] Track actual API call costs vs estimates
+- [ ] Verify 50-70% cost reduction claim
+- [ ] Update savings report with actual costs
+
+### Phase 3.3: Budget Awareness (Day 4 - Optional)
+
+#### Step 8: Configuration & Alerts
+- [ ] Add cost configuration to `curator.yaml`
+- [ ] Implement cost estimation before operations
+- [ ] Add budget warnings
+- [ ] Display cost optimization tips
+
+#### Step 9: Testing
 - [ ] Test with Anthropic Claude
 - [ ] Test with OpenAI
 - [ ] Test with Google Gemini
 - [ ] Test with Ollama (should show $0)
-- [ ] Verify token counts are accurate
+- [ ] Test fallback cost tracking
+- [ ] Test snapshot cost metadata
+- [ ] Test cost comparison in diff
+- [ ] Verify token counts are accurate (±5%)
 
-### Step 5: Documentation
+#### Step 10: Documentation
 - [ ] Update [LLM_PROVIDERS.md](../LLM_PROVIDERS.md) with cost information
 - [ ] Add cost comparison table
 - [ ] Add tips for cost optimization
+- [ ] Document snapshot cost metadata format
 - [ ] Update [QUICKSTART.md](../../QUICKSTART.md) with cost examples
+- [ ] Document cost monitoring in [CLAUDE.md](../../CLAUDE.md)
 
 ## Example Output
 
@@ -372,6 +563,38 @@ cost:
 - ✅ Documentation includes cost guidance
 - ✅ Users report making informed decisions about provider choice
 
+## Relationship to Snapshot Design Questions
+
+This feature **partially addresses** snapshot design question #3 (LLM Metadata Tracking):
+
+**Decision Made**: **Option C - Track both levels**
+- Snapshot-level aggregate for quick overview
+- Per-evaluation detail when needed (via `evaluations_by_provider`)
+- Enables both cost analysis and reproducibility tracking
+
+**Benefits**:
+- Complete traceability for debugging
+- Cost analysis without parsing all evaluations
+- Supports provider mismatch warnings (design question #4)
+- Foundation for future cost optimization
+
+**Addresses Design Question #4** (Snapshot Comparability):
+- **Option A - Warn on provider mismatch**: Implemented via cost comparison
+- Shows which providers were used in each snapshot
+- Displays warning when comparing different providers
+- Provides context for score interpretation
+
 ---
 
-**Next Steps**: Implement Phase 1 (basic cost display) in Week 2 alongside semantic search features.
+## Summary
+
+**Priority**: 🔥 TOP PRIORITY for Phase 3
+**Dependencies**: Research workspace system (✅ complete), LLM fallback (✅ complete)
+**Impact**: High - Enables cost visibility, budget management, and provider decision-making
+**Deliverables**:
+1. Real-time cost tracking across all LLM operations
+2. Cost metadata in research snapshots
+3. Cost comparison in diff command
+4. Budget awareness and optimization tips
+
+**Next Steps**: Begin implementation with Phase 3.1 (Real-Time Cost Tracking)
