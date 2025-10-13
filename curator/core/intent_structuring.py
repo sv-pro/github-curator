@@ -2,14 +2,12 @@
 
 import hashlib
 import json
-import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-import anthropic
 import yaml
 
 
@@ -85,7 +83,11 @@ class IntentStructurer:
     def __init__(self, config_path: str = "config/curator.yaml", cache_dir: str = ".cache/intents"):
         """Initialize with configuration."""
         self.config = self._load_config(config_path)
-        self.client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        self.config_path = config_path
+        # Use fallback-enabled LLM provider from config
+        from curator.llm import create_llm_provider_from_config
+
+        self.llm_provider = create_llm_provider_from_config(config_path)
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -247,16 +249,18 @@ Return your response as a JSON array of dimensions with this structure:
 
 Ensure weights sum to 1.0. Make indicators specific and detectable."""
 
-        response = self.client.messages.create(
-            model="claude-sonnet-4-5-20250929",
+        # Use fallback-enabled LLM provider
+        from curator.llm.base import LLMMessage
+
+        response = self.llm_provider.complete(
+            messages=[LLMMessage(role="user", content=prompt)],
             max_tokens=2000,
-            messages=[{"role": "user", "content": prompt}],
         )
 
-        # Parse Claude's response
+        # Parse LLM response
         import json
 
-        response_text = response.content[0].text
+        response_text = response.content
 
         # Extract JSON from response
         start_idx = response_text.find("{")

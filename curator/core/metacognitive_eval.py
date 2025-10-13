@@ -1,12 +1,10 @@
 """Metacognitive evaluation module - evaluates repositories with explicit confidence tracking."""
 
 import json
-import os
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-import anthropic
 import yaml
 
 from curator.core.intent_structuring import Dimension, StructuredIntent
@@ -101,7 +99,11 @@ class MetacognitiveEvaluator:
     def __init__(self, config_path: str = "config/curator.yaml"):
         """Initialize evaluator."""
         self.config = self._load_config(config_path)
-        self.client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        self.config_path = config_path
+        # Use fallback-enabled LLM provider from config
+        from curator.llm import create_llm_provider_from_config
+
+        self.llm_provider = create_llm_provider_from_config(config_path)
 
     def _load_config(self, config_path: str) -> dict[str, Any]:
         """Load configuration from YAML file."""
@@ -226,14 +228,16 @@ Return a JSON object with this structure:
 
 Be precise and trace all claims to specific evidence."""
 
-        response = self.client.messages.create(
-            model="claude-sonnet-4-5-20250929",
+        # Use fallback-enabled LLM provider
+        from curator.llm.base import LLMMessage
+
+        response = self.llm_provider.complete(
+            messages=[LLMMessage(role="user", content=prompt)],
             max_tokens=2000,
-            messages=[{"role": "user", "content": prompt}],
         )
 
         # Parse response
-        response_text = response.content[0].text
+        response_text = response.content
         start_idx = response_text.find("{")
         end_idx = response_text.rfind("}") + 1
         json_text = response_text[start_idx:end_idx]
