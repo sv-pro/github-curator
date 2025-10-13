@@ -79,11 +79,12 @@ llm:
     ollama:
       base_url: http://localhost:11434
 
-  # Fallback providers (if primary fails)
-  fallback_enabled: false
+  # Fallback providers (automatically switch if primary fails with quota/credit errors)
+  # Recommended: Enable with OpenAI as backup, and Ollama as last resort
+  fallback_enabled: true
   fallback_providers:
-    - openai
-    - google
+    - openai     # Fallback #1: Commercial API (requires OPENAI_API_KEY)
+    - ollama     # Fallback #2: Local model (requires Ollama running locally)
 
 validation:
   strict_mode: false

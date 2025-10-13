@@ -9,6 +9,7 @@ from curator.errors import (
     LLMAPIError,
     LLMAuthenticationError,
     LLMModelError,
+    LLMQuotaExceededError,
     LLMRateLimitError,
 )
 from curator.llm.base import BaseLLMProvider, LLMMessage, LLMResponse
@@ -218,6 +219,23 @@ class LangChainProvider(BaseLLMProvider):
         except Exception as e:
             # Map exceptions to our error hierarchy
             error_str = str(e).lower()
+
+            # Check for credit/quota issues first
+            if any(
+                phrase in error_str
+                for phrase in [
+                    "credit balance",
+                    "quota exceeded",
+                    "insufficient credits",
+                    "billing",
+                    "payment required",
+                ]
+            ):
+                raise LLMQuotaExceededError(
+                    provider=self.provider,
+                    message=f"Credit/quota exceeded: {e}",
+                    details={"model": self.get_model_name()},
+                ) from e
 
             if "auth" in error_str or "api key" in error_str or "401" in error_str:
                 raise LLMAuthenticationError(

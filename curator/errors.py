@@ -114,6 +114,19 @@ class LLMRateLimitError(LLMError):
         super().__init__(message, details)
 
 
+class LLMQuotaExceededError(LLMError):
+    """LLM API quota/credit balance exceeded."""
+
+    def __init__(
+        self, provider: str, message: Optional[str] = None, details: Optional[dict] = None
+    ):
+        if not message:
+            message = f"{provider} API quota or credit balance exceeded"
+        details = details or {}
+        details["provider"] = provider
+        super().__init__(message, details)
+
+
 class LLMTimeoutError(LLMError):
     """LLM API request timed out."""
 
