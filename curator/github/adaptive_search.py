@@ -4,8 +4,10 @@ import json
 from dataclasses import dataclass
 from typing import Any, Optional
 
-import anthropic
 import yaml
+
+from curator.llm import create_llm_provider_from_config
+from curator.llm.base import LLMMessage
 
 
 @dataclass
@@ -33,7 +35,9 @@ class AdaptiveSearchStrategy:
     def __init__(self, config_path: str = "config/curator.yaml"):
         """Initialize adaptive search strategy."""
         self.config = self._load_config(config_path)
-        self.client = anthropic.Anthropic()
+        self.config_path = config_path
+        # Use fallback-enabled LLM provider from config
+        self.llm_provider = create_llm_provider_from_config(config_path)
 
         adaptive_config = self.config["github"]["adaptive_search"]
         self.enabled = adaptive_config.get("enabled", False)
@@ -53,7 +57,7 @@ class AdaptiveSearchStrategy:
     def generate_search_queries(
         self, theme: str, style: str = "balanced", count: int = 3
     ) -> list[str]:
-        """Generate search queries using Claude.
+        """Generate search queries using LLM with fallback support.
 
         Args:
             theme: Main curation theme
@@ -82,14 +86,14 @@ Requirements:
 Return ONLY a JSON array of query strings, nothing else.
 Example: ["query one", "query two", "query three"]"""
 
-        response = self.client.messages.create(
-            model="claude-sonnet-4-5-20250929",
+        # Use LLM provider with fallback support
+        response = self.llm_provider.complete(
+            messages=[LLMMessage(role="user", content=prompt)],
             max_tokens=500,
-            messages=[{"role": "user", "content": prompt}],
         )
 
-        response_text = response.content[0].text.strip()
-        # Extract JSON array
+        # Extract JSON array from response content
+        response_text = response.content
         start = response_text.find("[")
         end = response_text.rfind("]") + 1
         queries = json.loads(response_text[start:end])

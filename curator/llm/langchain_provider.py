@@ -162,6 +162,8 @@ class LangChainProvider(BaseLLMProvider):
         model = self._model or "llama3.3"
         base_url = self.base_url or "http://localhost:11434"
 
+        # Ollama doesn't support max_tokens/temperature in invoke(),
+        # need to use .bind() to set them
         return ChatOllama(
             model=model,
             base_url=base_url,
@@ -187,13 +189,19 @@ class LangChainProvider(BaseLLMProvider):
             # it's handled via AIMessage in chat history
 
         try:
-            # Invoke the LLM
-            response = self.llm.invoke(
-                lc_messages,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                **kwargs,
-            )
+            # Ollama doesn't support parameters in invoke(), other providers do
+            if self.provider == "ollama":
+                # Ollama: simple invoke without parameters
+                # Parameters must be set in the ChatOllama constructor
+                response = self.llm.invoke(lc_messages)
+            else:
+                # Anthropic, OpenAI, Google: pass parameters to invoke()
+                response = self.llm.invoke(
+                    lc_messages,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    **kwargs,
+                )
 
             # Extract usage information if available
             usage = {}

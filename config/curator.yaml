@@ -72,7 +72,7 @@ llm:
     anthropic: claude-sonnet-4-5-20250929
     openai: gpt-4o
     google: gemini-2.0-flash-exp
-    ollama: llama3.3
+    ollama: llama3:latest
 
   # Provider-specific settings
   providers:
@@ -83,8 +83,8 @@ llm:
   # Recommended: Enable with OpenAI as backup, and Ollama as last resort
   fallback_enabled: true
   fallback_providers:
-    - openai     # Fallback #1: Commercial API (requires OPENAI_API_KEY)
-    - ollama     # Fallback #2: Local model (requires Ollama running locally)
+    # - openai     # Fallback #1: Commercial API (requires OPENAI_API_KEY)
+    - ollama     # Fallback: Local model (requires Ollama running locally)
 
 validation:
   strict_mode: false

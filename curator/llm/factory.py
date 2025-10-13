@@ -61,6 +61,10 @@ def create_llm_provider(
     # Determine provider
     provider_name = (provider or os.getenv("CURATOR_LLM_PROVIDER") or "anthropic").lower()
 
+    # Extract internal config keys for fallback providers (don't pass to primary)
+    models_config = kwargs.pop("_models_config", {})
+    providers_config = kwargs.pop("_providers_config", {})
+
     # Create primary provider
     primary_provider: BaseLLMProvider
     if use_langchain:
@@ -110,12 +114,17 @@ def create_llm_provider(
 
     for fallback_name in fallback_providers:
         try:
+            # Get model and settings for this fallback provider
+            fallback_model = models_config.get(fallback_name)
+            fallback_settings = providers_config.get(fallback_name, {}).copy()
+
             # Create fallback provider (recursively, but without further fallbacks)
             fallback = create_llm_provider(
                 provider=fallback_name,
+                model=fallback_model,
                 use_langchain=use_langchain,
                 fallback_providers=None,  # No nested fallbacks
-                **kwargs,
+                **fallback_settings,
             )
             provider_chain.append(fallback)
             logger.debug(f"Added fallback provider: {fallback_name}")
@@ -130,7 +139,9 @@ def create_llm_provider(
     return FallbackLLMProvider(providers=provider_chain)
 
 
-def create_llm_provider_from_config(config_path: str = "config/curator.yaml") -> BaseLLMProvider:
+def create_llm_provider_from_config(
+    config_path: str = "config/curator.yaml",
+) -> BaseLLMProvider:
     """Create LLM provider from configuration file with fallback support.
 
     Reads the curator.yaml configuration and creates a provider with optional
@@ -184,6 +195,11 @@ def create_llm_provider_from_config(config_path: str = "config/curator.yaml") ->
 
     # Build kwargs
     kwargs = provider_settings.copy()
+
+    # If fallback enabled, pass models and providers_config for fallback providers
+    if fallback_enabled and fallback_providers_list:
+        kwargs["_models_config"] = models
+        kwargs["_providers_config"] = providers_config
 
     # Create provider with optional fallbacks
     return create_llm_provider(
