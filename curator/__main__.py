@@ -1350,9 +1350,13 @@ def research_show(name: str):
         click.echo("Workspace:")
         click.echo(f"   Path: {manager.get_research_path(name)}")
 
-        # Count repos
+        # Count repos (use same logic as list command)
         repos_path = manager.get_repos_path(name)
-        repo_count = len(list(repos_path.iterdir())) if repos_path.exists() else 0
+        repo_count = 0
+        if repos_path.exists():
+            for org_dir in repos_path.iterdir():
+                if org_dir.is_dir():
+                    repo_count += sum(1 for r in org_dir.iterdir() if r.is_dir())
         click.echo(f"   Repositories: {repo_count}")
 
         # Count snapshots
@@ -1461,6 +1465,11 @@ def research_add(name: str, repo_url: str):
 @click.option("--min-stars", type=int, help="Override minimum stars from config")
 @click.option("--max-age-days", type=int, help="Override max age from config")
 @click.option("--language", help="Filter by programming language")
+@click.option(
+    "--resume",
+    is_flag=True,
+    help="Resume interrupted collection (rerun search and skip existing repos)",
+)
 @click.option("--config", "-c", default="config/curator.yaml", help="Configuration file path")
 def research_collect(
     name: str,
@@ -1468,6 +1477,7 @@ def research_collect(
     min_stars: Optional[int],
     max_age_days: Optional[int],
     language: Optional[str],
+    resume: bool,
     config: str,
 ):
     """Collect repositories and add to research workspace.
@@ -1477,6 +1487,9 @@ def research_collect(
     Searches GitHub using the workspace's configured query and parameters,
     then adds matching repositories to the workspace for evaluation.
 
+    Use --resume to continue an interrupted collection operation. This will
+    rerun the search and skip repositories that were already cloned.
+
     Examples:
 
         # Use config query and defaults
@@ -1484,6 +1497,9 @@ def research_collect(
 
         # Override parameters
         curator research collect python-async-2025 --limit 20 --min-stars 1000
+
+        # Resume interrupted collection
+        curator research collect python-async-2025 --resume
 
         # Filter by language
         curator research collect web-frameworks --language python --limit 30
@@ -1498,7 +1514,10 @@ def research_collect(
         # Load workspace config
         ws_config = manager.load_config(name)
 
-        click.echo(f"🔍 Collecting repositories for: {name}")
+        if resume:
+            click.echo(f"🔄 Resuming collection for: {name}")
+        else:
+            click.echo(f"🔍 Collecting repositories for: {name}")
         click.echo(f"   Query: {ws_config.query}")
         click.echo("")
 
@@ -1552,11 +1571,17 @@ def research_collect(
         skipped = len(repos) - len(new_repos)
 
         if skipped > 0:
-            click.echo(f"ℹ️  Skipping {skipped} repositories already in workspace")
+            if resume:
+                click.echo(f"✓ {skipped} repositories already cloned (skipping)")
+            else:
+                click.echo(f"ℹ️  Skipping {skipped} repositories already in workspace")
             click.echo("")
 
         if not new_repos:
-            click.echo("✅ All matching repositories already in workspace")
+            if resume:
+                click.echo("✅ All repositories from search are already cloned")
+            else:
+                click.echo("✅ All matching repositories already in workspace")
             return
 
         click.echo(f"📦 Adding {len(new_repos)} new repositories...")
@@ -1580,10 +1605,16 @@ def research_collect(
                 click.echo(f"  ✗ Failed: {e}", err=True)
 
         click.echo("")
-        click.echo("✨ Collection complete!")
+        if resume:
+            click.echo("✨ Resume complete!")
+        else:
+            click.echo("✨ Collection complete!")
         click.echo(f"   Added: {added}")
         if failed > 0:
             click.echo(f"   Failed: {failed}")
+            if resume:
+                click.echo("")
+                click.echo("💡 To retry failed repositories, run the same command again")
         click.echo(f"   Total in workspace: {len(existing_repos) + added}")
         click.echo("")
         click.echo("Next steps:")
