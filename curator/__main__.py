@@ -1627,17 +1627,18 @@ def research_collect(
 
 @research.command("snapshot")
 @click.argument("name")
-@click.argument("snapshot_name")
+@click.argument("snapshot_name", required=False)
 @click.option("--config", "-c", default="config/curator.yaml", help="Configuration file path")
 @click.option(
     "--use-git-clone", is_flag=True, help="Clone repos locally instead of using GitHub API"
 )
-def research_snapshot(name: str, snapshot_name: str, config: str, use_git_clone: bool):
+def research_snapshot(name: str, snapshot_name: Optional[str], config: str, use_git_clone: bool):
     """Create an evaluation snapshot of research workspace.
 
     NAME: Research workspace name
 
-    SNAPSHOT_NAME: Name for this snapshot (e.g., baseline, update-2025-10)
+    SNAPSHOT_NAME: Optional name for this snapshot. If omitted, generates a
+    timestamped name like: snapshot-<workspace>-2025-10-13T15-30-45
 
     Evaluates all repositories in the workspace using the configured theme,
     then saves results as a timestamped JSON snapshot. Snapshots enable
@@ -1645,7 +1646,10 @@ def research_snapshot(name: str, snapshot_name: str, config: str, use_git_clone:
 
     Examples:
 
-        # Create baseline snapshot
+        # Create snapshot with auto-generated name
+        curator research snapshot python-async-2025
+
+        # Create named baseline snapshot
         curator research snapshot python-async-2025 baseline
 
         # Create update snapshot
@@ -1655,6 +1659,12 @@ def research_snapshot(name: str, snapshot_name: str, config: str, use_git_clone:
     from datetime import datetime
 
     try:
+        # Generate default snapshot name if not provided
+        if snapshot_name is None:
+            timestamp = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+            snapshot_name = f"snapshot-{name}-{timestamp}"
+            click.echo(f"📸 Auto-generated snapshot name: {snapshot_name}")
+            click.echo("")
         manager = ResearchManager()
 
         if not manager.exists(name):
