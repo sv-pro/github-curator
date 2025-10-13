@@ -41,6 +41,14 @@ Branch: `feature/research-architecture`
 - Auto-generated snapshot names: `snapshot-<workspace>-<ISO-timestamp>`
 - **Total**: ~26 lines changed in [curator/__main__.py](curator/__main__.py)
 
+**Feature 5: Complete LLM Fallback Coverage** ✅ COMPLETE (Commit: dc8c858)
+
+- Extended fallback to IntentStructurer and MetacognitiveEvaluator
+- Now ALL LLM operations support automatic fallback
+- Snapshot command fully functional with Ollama fallback
+- Removed direct Anthropic client instantiations
+- **Total**: ~23 lines changed across 2 files in [curator/core/](curator/core/)
+
 **Previous Milestones**:
 
 1. Repository Tracking System ✅ (9cf6253)
@@ -53,13 +61,12 @@ Branch: `feature/research-architecture`
 ## Recent Commits
 
 ```bash
+dc8c858 fix: Enable LLM fallback in IntentStructurer and MetacognitiveEvaluator
+ec1fc00 docs: Update context with CLI consistency improvements
 6848968 feat: Make snapshot name optional with auto-generated default
 d47b6ea refactor: Use positional args for snapshot and diff commands
 4da2d71 docs: Update context with adaptive search fallback integration
 5810da5 fix: Enable automatic LLM fallback in adaptive search
-ef4ba4d docs: Update context with LLM fallback implementation
-230fc5c docs: Add LLM fallback demo script
-57ba3b3 feat: Add LLM provider fallback chain for quota exhaustion
 ```
 
 ## Current Status
@@ -67,12 +74,12 @@ ef4ba4d docs: Update context with LLM fallback implementation
 ### Branch Status
 
 - **Branch**: `feature/research-architecture`
-- **Status**: ✅ Clean working directory (all committed)
-- **Latest commit**: Optional snapshot names (6848968)
+- **Status**: ⚠️ Uncommitted design doc (SNAPSHOT_DESIGN_QUESTIONS.md)
+- **Latest commit**: Complete LLM fallback coverage (dc8c858)
 - **Phase 1 Progress**: ✅ 100% COMPLETE
 - **Phase 2 Progress**: ✅ 100% COMPLETE
 - **Phase 3 Progress**: ✅ 100% COMPLETE
-- **Total Lines Added**: ~2,393 lines (340 Phase 1 + 350 Phase 2 + 417 Phase 3 + 340 backend + 37 fixes + 835 fallback + 48 integration + 26 CLI)
+- **Total Lines Added**: ~2,416 lines (340 Phase 1 + 350 Phase 2 + 417 Phase 3 + 340 backend + 37 fixes + 835 fallback + 48 integration + 26 CLI + 23 core)
 
 ### What's Working
 
@@ -727,21 +734,25 @@ ollama serve  # http://localhost:11434
 ### Technical Details
 
 **Type safety**:
+
 - All code passes mypy strict checks
 - Type annotations for Optional[Exception], list[BaseLLMProvider]
 - Proper inheritance from BaseLLMProvider
 
 **Provider independence**:
+
 - Each provider can have different models configured
 - Provider-specific settings (e.g., Ollama base_url)
 - Fallback works with both LangChain and legacy providers
 
 **Error propagation**:
+
 - Only quota/rate limit errors trigger fallback
 - Authentication and model errors don't trigger fallback
 - Final error re-raised if all providers exhausted
 
 **State tracking**:
+
 - `_exhausted_providers` set tracks failed providers
 - `_current_provider_index` tracks active provider
 - Status exposed via `get_provider_status()` method
@@ -770,11 +781,13 @@ All linters passing:
 ### Next Steps
 
 **Ready for use**:
+
 - Feature is complete and enabled by default
 - User can test with: `curator research collect <workspace> --resume`
 - Fallback will activate automatically on credit exhaustion
 
 **Future enhancements**:
+
 - Integration tests with mocked providers
 - Cost tracking across fallback chain
 - Per-provider usage statistics
@@ -871,6 +884,7 @@ Iteration 1/5: 0 repos found
 ### Technical Details
 
 **Provider parameter differences**:
+
 - Anthropic/OpenAI/Google: Support `max_tokens`, `temperature` in `invoke()`
 - Ollama: Doesn't support parameters in `invoke()`, must configure at construction
 
@@ -882,6 +896,7 @@ Iteration 1/5: 0 repos found
 5. Creates provider with correct model and settings
 
 **Error propagation**:
+
 - Anthropic fails → `LLMQuotaExceededError` raised
 - FallbackLLMProvider catches it → marks Anthropic as exhausted
 - Tries next provider (Ollama) → success
@@ -1011,10 +1026,12 @@ curator research refresh <workspace> [--sync|--discover|--all]
 **Pattern**: `snapshot-<workspace>-<YYYY-MM-DDTHH-MM-SS>`
 
 **Examples**:
+
 - `snapshot-python-async-2025-2025-10-13T18-30-45`
 - `snapshot-web-frameworks-2025-10-13T19-15-22`
 
 **Advantages**:
+
 - Unique (timestamp precision to seconds)
 - Sortable (ISO 8601 format)
 - Informative (contains workspace name)
@@ -1066,9 +1083,148 @@ All linters passing: black ✓, ruff ✓, mypy ✓
 - Default value generation happens at runtime in function body
 - Backward compatible: existing scripts with explicit names still work
 
-### Key Insights
+### Summary Insights
 
 - **User feedback matters**: Interface inconsistencies are easy to miss during implementation
 - **Positional args are natural**: For required data, options add cognitive overhead
 - **Smart defaults improve UX**: Auto-generation removes naming burden for quick iterations
 - **ISO timestamps are practical**: Built-in sorting and uniqueness without collision risk
+
+## Snapshot Design Questions (2025-10-13)
+
+### User Observations
+
+User noticed that snapshot command uses LLM but wasn't showing fallback behavior, which led to discovering that IntentStructurer and MetacognitiveEvaluator needed fallback integration (now fixed).
+
+During discussion, user raised important design questions about snapshot architecture:
+
+### Open Design Questions
+
+Documented in [docs/SNAPSHOT_DESIGN_QUESTIONS.md](docs/SNAPSHOT_DESIGN_QUESTIONS.md) - **DO NOT IMPLEMENT YET**
+
+#### 1. Snapshot Artifacts: Full State vs Delta
+
+**Current**: Single JSON file with complete state
+- Full evaluation of all repos
+- Statistics and metadata
+- Self-contained
+
+**Question**: Should we produce TWO artifacts?
+- **Full State** (current): Complete snapshot for absolute comparisons
+- **Delta Snapshot** (NEW): Semantic diff with narrative explaining what changed and why
+
+**Options**:
+
+- A: Keep only full state (current, simple)
+- B: Generate both automatically (comprehensive but complex)
+- C: Make delta optional with `--with-delta` flag
+- D: Generate delta on-demand via separate command
+
+**Trade-offs**: Richer semantics vs complexity, storage cost, requires LLM to analyze changes
+
+#### 2. Git Pull Before Snapshot
+
+**Current**: Snapshots evaluate repos as currently cloned (may be stale)
+
+**Question**: Should snapshot auto-pull latest code?
+
+**Options**:
+
+- A: Always pull before snapshot (fresh but slow, ~50+ repos)
+- B: Never pull, require explicit `refresh --sync` (current, explicit control)
+- C: Add `--pull` flag to snapshot command
+- D: Auto-pull only if repos are stale (>24h)
+- E: Interactive prompt if stale (breaks automation)
+
+**Considerations**:
+
+- Performance: Pulling 50+ repos is slow
+- Control: User might want to snapshot specific commit
+- Freshness: Easy to forget to sync
+- Transparency: Hidden side effects vs explicit steps
+
+#### 3. LLM Provider/Model Metadata
+
+**Current**: No tracking of which LLM provider/model was used
+
+**Question**: How to track provider metadata for reproducibility?
+
+**Why it matters**:
+
+- Different models score differently
+- Fallback means different repos might use different providers
+- Comparability: Can we compare snapshots made with different models?
+
+**Proposed metadata structure**:
+```json
+{
+  "llm_metadata": {
+    "intent_structurer": {
+      "provider": "ollama",
+      "model": "llama3:latest",
+      "fallback_occurred": true
+    },
+    "evaluations": [
+      {"repo": "owner/repo1", "provider": "ollama", "model": "llama3:latest"},
+      {"repo": "owner/repo2", "provider": "anthropic", "model": "claude-sonnet-4"}
+    ]
+  }
+}
+```
+
+**Options**:
+
+- A: Track at snapshot level (aggregate overview)
+- B: Track per-evaluation (complete traceability)
+- C: Track both levels (comprehensive but redundant)
+- D: Track only when fallback occurs (minimal overhead)
+
+#### 4. Snapshot Comparability
+
+**Question**: How to handle comparing snapshots made with different providers?
+
+**Scenario**:
+
+```bash
+curator research snapshot workspace baseline  # Used Anthropic
+curator research snapshot workspace update    # Used Ollama (credit exhaustion)
+curator research diff workspace baseline update  # Comparable?
+```
+
+**Options**:
+
+- A: Warn on provider mismatch (simple, user awareness)
+- B: Normalize scores by provider (complex, requires calibration)
+- C: Re-evaluate baseline with current provider for fair comparison (expensive)
+- D: Accept approximate comparability, focus on trends (pragmatic)
+
+### Current State Summary
+
+**What snapshots currently store**:
+
+- Full evaluation state (scores, confidence, evidence)
+- Intent structure (dimensions and indicators)
+- Aggregate statistics
+- Timestamp and workspace info
+- **Missing**: LLM provider metadata, semantic deltas
+
+**What diff currently does**:
+
+- Calculates numeric deltas between snapshots
+- Shows new/removed/changed repos
+- Aggregate statistics comparison
+- **Missing**: Semantic explanation of WHY things changed
+
+### Next Steps
+
+1. **Review design questions** - Decide on options for each question
+2. **Update CLAUDE.md** - Document chosen approach
+3. **Plan implementation** - Break down into phases if needed
+4. **Consider user workflows** - Which options best serve actual use cases
+
+### Key Insights
+
+- **Fallback complicates reproducibility**: Different models = different scores
+- **Snapshots need richer semantics**: Numbers alone don't tell the story
+- **Sync strategy matters**: Fresh data vs performance vs user control
+- **Metadata is critical**: For traceability, comparability, and understanding results
